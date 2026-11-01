@@ -719,7 +719,20 @@ body {
   height: 100%;
   justify-content: flex-end;
   gap: 6px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
 }
+
+.chart-bar-col:hover .chart-bar-fill { filter: brightness(1.08); }
+.chart-bar-col:focus-visible { outline: 2px solid var(--theme-accent); outline-offset: 3px; }
+.chart-bar-col.selected .chart-bar-fill-wrap { box-shadow: 0 0 0 2px var(--theme-accent); }
+.chart-bar-col.selected .chart-bar-label { color: var(--text-main); }
 
 .chart-bar-fill-wrap {
   width: 100%;
@@ -1127,13 +1140,26 @@ body {
   aspect-ratio: 1;
   border-radius: 3px;
   background: var(--surface-muted);
+  border: 0;
+  padding: 0;
+  min-width: 0;
+  cursor: pointer;
+  transition: transform 0.15s ease;
 }
 
-.heat-cell.empty { background: transparent; }
-.heat-cell.level-1 { background: var(--theme-accent); opacity: 0.3; }
-.heat-cell.level-2 { background: var(--theme-accent); opacity: 0.5; }
-.heat-cell.level-3 { background: var(--theme-accent); opacity: 0.75; }
-.heat-cell.level-4 { background: var(--theme-accent); opacity: 1; }
+button.heat-cell:hover { transform: scale(1.25); }
+.heat-cell:focus-visible,
+.heat-cell.selected {
+  outline: 2px solid var(--text-main);
+  outline-offset: 1px;
+}
+
+/* Mixed into the cell colour (not opacity) so the selected outline stays crisp */
+.heat-cell.empty { background: transparent; cursor: default; }
+.heat-cell.level-1 { background: color-mix(in srgb, var(--theme-accent) 30%, var(--surface-muted)); }
+.heat-cell.level-2 { background: color-mix(in srgb, var(--theme-accent) 55%, var(--surface-muted)); }
+.heat-cell.level-3 { background: color-mix(in srgb, var(--theme-accent) 78%, var(--surface-muted)); }
+.heat-cell.level-4 { background: var(--theme-accent); }
 
 .by-task-header {
   margin-top: 4px;
@@ -1324,6 +1350,159 @@ body {
     grid-column: auto;
     order: 0;
   }
+}
+
+/* Day details under the 7-day chart and the heatmap */
+.day-detail {
+  margin: 12px 0 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--theme-accent-light);
+  font-size: 0.85rem;
+  animation: detail-in 0.2s ease;
+}
+
+.heatmap + .day-detail { margin: -6px 0 18px; }
+
+.day-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.day-detail-total {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.day-detail-close {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.day-detail-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.day-detail-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.day-detail-list li span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.day-detail-meta,
+.day-detail-empty {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.day-detail-empty { margin: 6px 0 0; }
+
+@keyframes detail-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Task just ticked off */
+.task-item.just-completed .task-checkbox-btn { animation: check-pop 0.35s ease; }
+
+@keyframes check-pop {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+
+/* Toast (Undo, session complete) */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 10px 10px 10px 18px;
+  border-radius: 16px;
+  background: #2b2f3a;
+  color: #fff;
+  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.45);
+  font-size: 0.9rem;
+  font-weight: 500;
+  opacity: 0;
+  transform: translate(-50%, 16px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+:root[data-theme="dark"] .toast { background: #e6e9ef; color: #1f2230; }
+
+.toast-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.toast-action {
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--theme-accent);
+  color: #1f2230;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.toast-close {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  opacity: 0.7;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.confetti-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 1200;
 }
 
 /* Respect users who ask for less motion */

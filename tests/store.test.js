@@ -236,3 +236,38 @@ test('longestStreak finds the longest consecutive run, across month ends', () =>
   assert.equal(S.longestStreak(['2026-01-05', '2026-01-05']), 1);
   assert.equal(S.longestStreak([]), 0);
 });
+
+test('restoreTask puts a deleted task back in its old place, once', () => {
+  const { store } = makeStore();
+  const a = store.addTask('A');
+  const b = store.addTask('B', 3);
+  store.addTask('C');
+  const removed = store.listTasks()[1];
+  store.deleteTask(b.id);
+  assert.equal(store.restoreTask(removed, 1), true);
+  assert.deepEqual(store.listTasks().map((t) => t.text), ['A', 'B', 'C']);
+  assert.equal(store.listTasks()[1].estimate, 3);
+  assert.equal(store.restoreTask(removed, 0), false, 'duplicate id is ignored');
+  assert.equal(store.restoreTask({ id: a.id + 'x', text: '  ' }), false, 'invalid task is ignored');
+  assert.equal(store.listTasks().length, 3);
+});
+
+test('dayDetail totals one local day and splits it by task', () => {
+  const { store, clock } = makeStore(new Date(2026, 9, 27, 23, 30));
+  const t = store.addTask('Thesis');
+  store.logSession({ duration_seconds: 1500, task_id: t.id });     // 27th, late evening
+  clock.t = new Date(2026, 9, 28, 0, 10);
+  store.logSession({ duration_seconds: 1500, task_id: t.id });     // 28th, just after midnight
+  store.logSession({ duration_seconds: 3000, task_id: t.id });
+  store.logSession({ duration_seconds: 600 });
+  store.logSession({ mode: 'shortBreak', duration_seconds: 300 });  // breaks don't count
+
+  const d = store.dayDetail('2026-10-28');
+  assert.equal(d.minutes, 85);
+  assert.equal(d.sessions, 3);
+  assert.deepEqual(d.tasks, [
+    { label: 'Thesis', sessions: 2, minutes: 75 },
+    { label: 'No task', sessions: 1, minutes: 10 },
+  ]);
+  assert.deepEqual(store.dayDetail('2026-10-01'), { date: '2026-10-01', minutes: 0, sessions: 0, tasks: [] });
+});

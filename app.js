@@ -98,6 +98,7 @@ function startTimer() {
   window.ambientSound.init(); // unlock audio on a user gesture so the end chime can play
   requestNotificationPermission();
   isRunning = true;
+  buzz(10);
   endsAt = Date.now() + timeLeft * 1000;
   setButtonState(true);
   // Wall-clock based: ticking faster than 1s keeps the display accurate when throttled.
@@ -105,8 +106,9 @@ function startTimer() {
   saveTimerState();
 }
 
-function pauseTimer() {
+function pauseTimer(silent = false) {
   if (!isRunning) return;
+  if (!silent) buzz(10);
   clearInterval(timerId);
   timerId = null;
   timeLeft = remainingSeconds(endsAt, Date.now());
@@ -154,7 +156,7 @@ function notifySessionEnd(finishedMode, upcomingMode) {
 }
 
 function handleSessionComplete() {
-  pauseTimer();
+  pauseTimer(true);
   const finishedMode = currentMode;
   const finishedDuration = totalDuration;
   const finishedTaskId = activeTaskId;
@@ -168,11 +170,22 @@ function handleSessionComplete() {
   if (config.auto_start) startTimer();
   saveTimerState();
 
+  let message = `${modeTitle(finishedMode)} complete`;
   if (finishedMode === 'focus') {
+    const sessionsBefore = todaySessions;
     store.logSession({ mode: 'focus', duration_seconds: finishedDuration, task_id: finishedTaskId });
     loadStats();
     fetchTasks();
+    const goalJustReached = sessionsBefore < config.daily_goal && todaySessions >= config.daily_goal;
+    if (goalJustReached) message = `🎉 Daily goal reached — ${todaySessions} sessions today!`;
+    else message = `🍅 ${Math.round(finishedDuration / 60)} min of focus logged`;
+    celebrate(goalJustReached ? 'big' : 'small');
   }
+  buzz([200, 100, 200]);
+  showToast(message, config.auto_start ? null : {
+    label: upcoming === 'focus' ? 'Start focus' : 'Start break',
+    onClick: startTimer,
+  });
 }
 
 function switchMode(newMode) {
@@ -323,6 +336,11 @@ function renderTasks() {
     `;
     checkBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (!task.completed) {
+        const r = checkBtn.getBoundingClientRect();
+        celebrate('tiny', r.left + r.width / 2, r.top + r.height / 2);
+        buzz(15);
+      }
       toggleTask(task.id, !task.completed);
     });
 
@@ -414,16 +432,34 @@ function addTask(text, estimate = 0) {
 function toggleTask(id, completed) {
   store.updateTask(id, { completed });
   fetchTasks();
+  if (completed) {
+    const li = taskListEl.querySelector(`[data-id="${CSS.escape(id)}"]`);
+    if (li) li.classList.add('just-completed');
+  }
 }
 
+/** Delete straight away, with an Undo in the toast that puts the task back where it was. */
 function deleteTask(id) {
-  if (activeTaskId === id) {
+  const index = tasks.findIndex(t => t.id === id);
+  if (index < 0) return;
+  const removed = tasks[index];
+  const wasActive = activeTaskId === id;
+  if (wasActive) {
     activeTaskId = null;
     activeTaskPillEl.style.display = 'none';
     saveTimerState();
   }
   store.deleteTask(id);
   fetchTasks();
+  showToast(`Deleted “${removed.text}”`, {
+    label: 'Undo',
+    onClick: () => {
+      if (!store.restoreTask(removed, index)) return;
+      if (wasActive) activeTaskId = id;
+      fetchTasks();
+      saveTimerState();
+    },
+  });
 }
 
 /** Swap a task's title for an input; Enter or leaving the field saves, Esc cancels. */
@@ -623,23 +659,115 @@ const heatmapEl = document.getElementById('heatmap');
 const heatmapTotalEl = document.getElementById('heatmap-total');
 const taskStatsEl = document.getElementById('task-stats');
 const taskStatsEmptyEl = document.getElementById('task-stats-empty');
+const heatmapDetailEl = document.getElementById('heatmap-detail');
+const weekDetailEl = document.getElementById('week-detail');
+
+let selectedHeatDay = null;
+let selectedWeekDay = null;
+
+/** 'Tue, Oct 28' for a 'YYYY-MM-DD' key. */
+function dayLabel(dateKey) {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+/** Fill a day-detail panel with that day's totals and focus per task, or hide it when no day is picked. */
+function renderDayDetail(el, dateKey, onClose) {
+  el.innerHTML = '';
+  el.hidden = !dateKey;
+  if (!dateKey) return;
+  const d = store.dayDetail(dateKey);
+
+  const head = document.createElement('div');
+  head.className = 'day-detail-head';
+  const title = document.createElement('strong');
+  title.textContent = dayLabel(dateKey);
+  const total = document.createElement('span');
+  total.className = 'day-detail-total';
+  total.textContent = d.sessions ? `${Math.round(d.minutes)} min · ${d.sessions} 🍅` : 'No focus';
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'day-detail-close';
+  close.setAttribute('aria-label', 'Close day details');
+  close.textContent = '×';
+  close.addEventListener('click', onClose);
+  head.append(title, total, close);
+  el.appendChild(head);
+
+  if (!d.tasks.length) {
+    const empty = document.createElement('p');
+    empty.className = 'day-detail-empty';
+    empty.textContent = 'No focus sessions this day.';
+    el.appendChild(empty);
+    return;
+  }
+  const list = document.createElement('ul');
+  list.className = 'day-detail-list';
+  d.tasks.forEach((t) => {
+    const li = document.createElement('li');
+    const name = document.createElement('span');
+    name.textContent = t.label;
+    const meta = document.createElement('span');
+    meta.className = 'day-detail-meta';
+    meta.textContent = `${t.sessions} 🍅 · ${Math.round(t.minutes)}m`;
+    li.append(name, meta);
+    list.appendChild(li);
+  });
+  el.appendChild(list);
+}
 
 function renderHeatmap(days) {
   heatmapEl.innerHTML = '';
   const max = Math.max(...days.map(d => d.minutes), 0);
+  if (selectedHeatDay && !days.some(d => d.date === selectedHeatDay)) selectedHeatDay = null;
+  const focusDate = selectedHeatDay || (days.length ? days[days.length - 1].date : null);
   heatmapCells(days).forEach(day => {
-    const cell = document.createElement('span');
     if (!day) {
-      cell.className = 'heat-cell empty';
-    } else {
-      cell.className = `heat-cell level-${heatLevel(day.minutes, max)}`;
-      cell.title = `${day.date}: ${day.minutes} min (${day.sessions} sessions)`;
+      const blank = document.createElement('span');
+      blank.className = 'heat-cell empty';
+      heatmapEl.appendChild(blank);
+      return;
     }
+    const cell = document.createElement('button');
+    cell.type = 'button';
+    cell.className = `heat-cell level-${heatLevel(day.minutes, max)}${day.date === selectedHeatDay ? ' selected' : ''}`;
+    cell.dataset.date = day.date;
+    cell.tabIndex = day.date === focusDate ? 0 : -1;
+    const text = `${dayLabel(day.date)}: ${Math.round(day.minutes)} min, ${day.sessions} ${day.sessions === 1 ? 'session' : 'sessions'}`;
+    cell.title = text;
+    cell.setAttribute('aria-label', text);
+    cell.setAttribute('aria-pressed', String(day.date === selectedHeatDay));
+    cell.addEventListener('click', () => {
+      selectedHeatDay = selectedHeatDay === day.date ? null : day.date;
+      loadInsights();
+      focusHeatCell(day.date);
+    });
     heatmapEl.appendChild(cell);
+  });
+  renderDayDetail(heatmapDetailEl, selectedHeatDay, () => {
+    selectedHeatDay = null;
+    loadInsights();
   });
   const hours = days.reduce((acc, d) => acc + d.minutes, 0) / 60;
   heatmapTotalEl.textContent = `${hours.toFixed(1)}h`;
 }
+
+function focusHeatCell(date) {
+  const cell = heatmapEl.querySelector(`[data-date="${date}"]`);
+  if (cell) cell.focus();
+}
+
+// Columns are weeks and rows are weekdays, so Up/Down move a day and Left/Right a week.
+heatmapEl.addEventListener('keydown', (e) => {
+  const step = { ArrowUp: -1, ArrowDown: 1, ArrowLeft: -7, ArrowRight: 7 }[e.key];
+  if (!step || !e.target.dataset.date) return;
+  e.preventDefault();
+  const cells = [...heatmapEl.querySelectorAll('button.heat-cell')];
+  const next = cells[Math.min(cells.length - 1, Math.max(0, cells.indexOf(e.target) + step))];
+  e.target.tabIndex = -1;
+  next.tabIndex = 0;
+  next.focus();
+});
 
 function renderTaskStats(rows) {
   taskStatsEl.innerHTML = '';
@@ -687,10 +815,20 @@ document.getElementById('export-csv-link').addEventListener('click', (e) => {
 function renderChart(dailyData) {
   weeklyChartEl.innerHTML = '';
   const maxMins = Math.max(...dailyData.map(d => d.minutes), 60); // minimum scale 60m
+  if (selectedWeekDay && !dailyData.some(d => d.date === selectedWeekDay)) selectedWeekDay = null;
 
   dailyData.forEach(day => {
-    const col = document.createElement('div');
-    col.className = 'chart-bar-col';
+    const col = document.createElement('button');
+    col.type = 'button';
+    col.className = `chart-bar-col${day.date === selectedWeekDay ? ' selected' : ''}`;
+    col.setAttribute('aria-label', `${dayLabel(day.date)}: ${Math.round(day.minutes)} min`);
+    col.setAttribute('aria-pressed', String(day.date === selectedWeekDay));
+    col.addEventListener('click', () => {
+      selectedWeekDay = selectedWeekDay === day.date ? null : day.date;
+      renderChart(dailyData);
+      const again = weeklyChartEl.children[dailyData.indexOf(day)];
+      if (again) again.focus();
+    });
 
     const wrap = document.createElement('div');
     wrap.className = 'chart-bar-fill-wrap';
@@ -710,6 +848,10 @@ function renderChart(dailyData) {
     col.appendChild(wrap);
     col.appendChild(label);
     weeklyChartEl.appendChild(col);
+  });
+  renderDayDetail(weekDetailEl, selectedWeekDay, () => {
+    selectedWeekDay = null;
+    renderChart(dailyData);
   });
 }
 
@@ -895,6 +1037,125 @@ importBackupInputEl.addEventListener('change', async () => {
     setDataStatus(err.message, true);
   }
 });
+
+// ====================================================
+// Feedback: toast with an optional action, confetti, haptics
+// ====================================================
+const toastEl = document.getElementById('toast');
+const toastTextEl = document.getElementById('toast-text');
+const toastActionEl = document.getElementById('toast-action');
+const confettiCanvas = document.getElementById('confetti');
+const TOAST_MS = 6000;
+let toastTimer = null;
+let toastOnAction = null;
+
+/** Show a short message at the bottom; `action` = {label, onClick} adds a button (e.g. Undo). */
+function showToast(text, action = null) {
+  clearTimeout(toastTimer);
+  toastTextEl.textContent = text;
+  toastOnAction = action ? action.onClick : null;
+  toastActionEl.hidden = !action;
+  toastActionEl.textContent = action ? action.label : '';
+  toastEl.hidden = false;
+  requestAnimationFrame(() => toastEl.classList.add('show'));
+  toastTimer = setTimeout(hideToast, TOAST_MS);
+}
+
+function hideToast() {
+  clearTimeout(toastTimer);
+  toastOnAction = null;
+  toastEl.classList.remove('show');
+  setTimeout(() => { if (!toastEl.classList.contains('show')) toastEl.hidden = true; }, 250);
+}
+
+toastActionEl.addEventListener('click', () => {
+  const run = toastOnAction;
+  hideToast();
+  if (run) run();
+});
+document.getElementById('toast-close').addEventListener('click', hideToast);
+// Keep the toast up while the pointer or keyboard is on it
+toastEl.addEventListener('pointerenter', () => clearTimeout(toastTimer));
+toastEl.addEventListener('pointerleave', () => { if (!toastEl.hidden) toastTimer = setTimeout(hideToast, TOAST_MS / 2); });
+toastEl.addEventListener('focusin', () => clearTimeout(toastTimer));
+
+function buzz(pattern) {
+  // Browsers block vibration until the user has interacted with the page (e.g. a timer restored on load)
+  const activated = !navigator.userActivation || navigator.userActivation.hasBeenActive;
+  if (navigator.vibrate && activated) {
+    try { navigator.vibrate(pattern); } catch (e) { /* not allowed without a gesture */ }
+  }
+}
+
+const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+let confettiPieces = [];
+let confettiFrame = null;
+
+/**
+ * Burst of confetti: 'tiny' from a point (task done), 'small' from the timer (session done),
+ * 'big' across the screen (daily goal). Skipped when the user asks for less motion.
+ */
+function celebrate(size = 'small', x, y) {
+  if (prefersReducedMotion.matches) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  if (confettiCanvas.width !== w * dpr || confettiCanvas.height !== h * dpr) {
+    confettiCanvas.width = w * dpr;
+    confettiCanvas.height = h * dpr;
+  }
+  const styles = getComputedStyle(document.documentElement);
+  const colors = ['--accent-focus', '--accent-short', '--accent-long', '--theme-ring']
+    .map(v => styles.getPropertyValue(v).trim()).concat('#ffd166');
+  if (x === undefined) {
+    const ring = document.querySelector('.timer-circle').getBoundingClientRect();
+    x = ring.left + ring.width / 2;
+    y = ring.top + ring.height / 2;
+  }
+  const count = size === 'big' ? 160 : size === 'small' ? 70 : 18;
+  const speed = size === 'tiny' ? 5 : 11;
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const v = speed * (0.4 + Math.random() * 0.8);
+    confettiPieces.push({
+      x: size === 'big' ? Math.random() * w : x,
+      y: size === 'big' ? -10 - Math.random() * h * 0.3 : y,
+      vx: Math.cos(angle) * v,
+      vy: size === 'big' ? Math.random() * 3 : Math.sin(angle) * v - 3,
+      size: 4 + Math.random() * 5,
+      rot: Math.random() * Math.PI,
+      spin: (Math.random() - 0.5) * 0.3,
+      color: colors[i % colors.length],
+      life: size === 'big' ? 200 : size === 'small' ? 110 : 45,
+    });
+  }
+  if (!confettiFrame) confettiFrame = requestAnimationFrame(drawConfetti);
+}
+
+function drawConfetti() {
+  const dpr = window.devicePixelRatio || 1;
+  const ctx = confettiCanvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+  confettiPieces = confettiPieces.filter(p => p.life > 0 && p.y < window.innerHeight + 20);
+  confettiPieces.forEach((p) => {
+    p.vx *= 0.98;
+    p.vy = p.vy * 0.98 + 0.25;
+    p.x += p.vx;
+    p.y += p.vy;
+    p.rot += p.spin;
+    p.life--;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, p.life / 30);
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rot);
+    ctx.fillStyle = p.color;
+    ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2);
+    ctx.restore();
+  });
+  confettiFrame = confettiPieces.length ? requestAnimationFrame(drawConfetti) : null;
+  if (!confettiFrame) ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+}
 
 // Initialization: settings first (durations depend on them), then restore the timer
 (function init() {
