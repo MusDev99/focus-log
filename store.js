@@ -221,6 +221,17 @@
       return kept.length !== tasks.length;
     }
 
+    /** Put a deleted task back (undo), at `index` in the list; ignored if its id already exists. */
+    function restoreTask(task, index) {
+      const clean = cleanTask(task);
+      const tasks = rawTasks();
+      if (!clean || tasks.some((t) => t.id === clean.id)) return false;
+      const at = Number.isInteger(index) ? Math.min(Math.max(0, index), tasks.length) : tasks.length;
+      tasks.splice(at, 0, clean);
+      write(KEYS.tasks, tasks);
+      return true;
+    }
+
     /** Reorder tasks to follow `ids`; unknown ids are ignored, tasks missing from `ids` keep their place at the end. */
     function reorderTasks(ids) {
       const tasks = rawTasks();
@@ -355,6 +366,36 @@
       return out;
     }
 
+    /** Focus on one local day ('YYYY-MM-DD'): totals plus minutes per task, busiest first. */
+    function dayDetail(dateKey) {
+      const titles = {};
+      rawTasks().forEach((t) => { titles[t.id] = t.text; });
+      const groups = new Map();
+      let seconds = 0;
+      let count = 0;
+      focusSessions().forEach((s) => {
+        if (localDayKey(new Date(s.completed_at)) !== dateKey) return;
+        seconds += s.duration_seconds;
+        count++;
+        const g = groups.get(s.task_id) || { task_id: s.task_id, sessions: 0, seconds: 0 };
+        g.sessions++;
+        g.seconds += s.duration_seconds;
+        groups.set(s.task_id, g);
+      });
+      return {
+        date: dateKey,
+        minutes: round1(seconds / 60),
+        sessions: count,
+        tasks: [...groups.values()]
+          .sort((a, b) => b.seconds - a.seconds)
+          .map((g) => ({
+            label: g.task_id == null ? 'No task' : titles[g.task_id] || '(deleted task)',
+            sessions: g.sessions,
+            minutes: round1(g.seconds / 60),
+          })),
+      };
+    }
+
     /**
      * Last 7 days (including today) compared with the 7 days before, plus best day,
      * top task this week and the longest streak ever.
@@ -419,8 +460,8 @@
     }
 
     return {
-      getSettings, saveSettings, listTasks, addTask, updateTask, deleteTask, reorderTasks,
-      logSession, summary, taskStats, heatmap, weeklyReview, sessionsCsv, exportBackup, importBackup,
+      getSettings, saveSettings, listTasks, addTask, updateTask, deleteTask, restoreTask, reorderTasks,
+      logSession, summary, taskStats, heatmap, dayDetail, weeklyReview, sessionsCsv, exportBackup, importBackup,
     };
   }
 

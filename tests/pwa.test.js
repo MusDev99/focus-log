@@ -60,3 +60,13 @@ test('settings include backup export and import controls', () => {
     assert.match(html, new RegExp(`id="${id}"`));
   });
 });
+
+test('page has the toast, confetti layer and day-detail panels the app drives', () => {
+  const html = read('index.html');
+  ['toast', 'toast-text', 'toast-action', 'toast-close', 'confetti', 'week-detail', 'heatmap-detail'].forEach((id) => {
+    assert.match(html, new RegExp(`id="${id}"`));
+  });
+  assert.match(html, /id="toast"[^>]*role="status"/);
+  assert.match(html, /<canvas id="confetti"[^>]*aria-hidden="true"/);
+  assert.doesNotMatch(html, /id="heatmap"[^>]*role="img"/, 'heatmap days are buttons now, not an image');
+});

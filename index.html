@@ -207,7 +207,8 @@
               <span class="chart-title">Last 7 Days</span>
               <span id="weekly-total" class="chart-subtitle">0h total</span>
             </div>
-            <div id="weekly-chart" class="bar-chart-bars"></div>
+            <div id="weekly-chart" class="bar-chart-bars" role="group" aria-label="Focus minutes for the last 7 days. Select a day for details."></div>
+            <div id="week-detail" class="day-detail" aria-live="polite" hidden></div>
           </div>
         </section>
 
@@ -238,7 +239,8 @@
             <span class="chart-title">Last 12 weeks</span>
             <span id="heatmap-total" class="chart-subtitle">0h</span>
           </div>
-          <div id="heatmap" class="heatmap" role="img" aria-label="Focus heatmap for the last 12 weeks"></div>
+          <div id="heatmap" class="heatmap" role="group" aria-label="Focus heatmap for the last 12 weeks. Select a day for details; arrow keys move between days."></div>
+          <div id="heatmap-detail" class="day-detail" aria-live="polite" hidden></div>
 
           <div class="chart-header by-task-header">
             <span class="chart-title">Focus by task</span>
@@ -299,6 +301,13 @@
       </form>
     </div>
   </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden>
+    <span id="toast-text" class="toast-text"></span>
+    <button id="toast-action" class="toast-action" type="button" hidden></button>
+    <button id="toast-close" class="toast-close" type="button" aria-label="Dismiss">&times;</button>
+  </div>
+  <canvas id="confetti" class="confetti-canvas" aria-hidden="true"></canvas>
 
   <script src="audio.js"></script>
   <script src="timer-core.js"></script>
