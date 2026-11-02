@@ -23,7 +23,7 @@
     try { document.documentElement.setAttribute('data-theme', localStorage.getItem('pomodoro-theme') || 'light'); } catch (e) {}
   </script>
 </head>
-<body data-mode="focus">
+<body data-mode="focus" data-view="timer">
   <div class="dashboard-wrapper">
     <!-- Top Bar -->
     <header class="dashboard-topbar">
@@ -91,7 +91,45 @@
             </button>
           </form>
 
+          <div class="task-view-toggle" role="group" aria-label="Task view">
+            <button class="task-view-btn" data-task-view="list" type="button" aria-pressed="true">List</button>
+            <button class="task-view-btn" data-task-view="matrix" type="button" aria-pressed="false">Matrix</button>
+          </div>
+
           <ul id="task-list" class="task-list"></ul>
+
+          <!-- Covey's time-management matrix (Habit 3: Put First Things First). Drag tasks between quadrants. -->
+          <div id="task-matrix" class="task-matrix" hidden>
+            <section class="quadrant q0" data-quadrant="0" aria-label="Unsorted tasks">
+              <header class="quadrant-head"><span class="quadrant-title">Unsorted</span><span class="quadrant-count" data-count="0">0</span></header>
+              <ul class="quadrant-list" data-list="0"></ul>
+              <p class="quadrant-hint">Drag a task into a quadrant. On a keyboard, focus it and press <kbd>1</kbd>–<kbd>4</kbd>.</p>
+              <p class="quadrant-done">All sorted ✓ Drop a task here to unsort it.</p>
+            </section>
+            <div class="quadrant-axis" aria-hidden="true"><span>Urgent</span><span>Not urgent</span></div>
+            <div class="quadrant-grid">
+              <section class="quadrant q1" data-quadrant="1" aria-label="Quadrant 1: Do now, Urgent · Important">
+                <header class="quadrant-head"><span class="quadrant-num">Q1</span><span class="quadrant-title">Do now</span><span class="quadrant-count" data-count="1">0</span></header>
+                <p class="quadrant-desc">Urgent · Important</p>
+                <ul class="quadrant-list" data-list="1"></ul>
+              </section>
+              <section class="quadrant q2" data-quadrant="2" aria-label="Quadrant 2: Schedule, Not urgent · Important">
+                <header class="quadrant-head"><span class="quadrant-num">Q2</span><span class="quadrant-title">Schedule</span><span class="quadrant-count" data-count="2">0</span></header>
+                <p class="quadrant-desc">Not urgent · Important</p>
+                <ul class="quadrant-list" data-list="2"></ul>
+              </section>
+              <section class="quadrant q3" data-quadrant="3" aria-label="Quadrant 3: Delegate, Urgent · Not important">
+                <header class="quadrant-head"><span class="quadrant-num">Q3</span><span class="quadrant-title">Delegate</span><span class="quadrant-count" data-count="3">0</span></header>
+                <p class="quadrant-desc">Urgent · Not important</p>
+                <ul class="quadrant-list" data-list="3"></ul>
+              </section>
+              <section class="quadrant q4" data-quadrant="4" aria-label="Quadrant 4: Drop, Not urgent · Not important">
+                <header class="quadrant-head"><span class="quadrant-num">Q4</span><span class="quadrant-title">Drop</span><span class="quadrant-count" data-count="4">0</span></header>
+                <p class="quadrant-desc">Not urgent · Not important</p>
+                <ul class="quadrant-list" data-list="4"></ul>
+              </section>
+            </div>
+          </div>
           <div id="task-empty-state" class="task-empty-state">No tasks yet. Add one to set your intention.</div>
         </section>
 
@@ -301,6 +339,29 @@
       </form>
     </div>
   </div>
+
+  <!-- Phone-only bottom tabs: one section at a time (hidden from 720px up) -->
+  <nav class="bottom-nav" aria-label="Sections">
+    <button class="bottom-nav-btn" data-view="timer" type="button" aria-current="page">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2.5 2.5"></path><path d="M9 2h6"></path>
+      </svg>
+      <span id="nav-timer-label">Timer</span>
+    </button>
+    <button class="bottom-nav-btn" data-view="tasks" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M9 6h11"></path><path d="M9 12h11"></path><path d="M9 18h11"></path><path d="M4 6l1 1 2-2"></path><path d="M4 12l1 1 2-2"></path><path d="M4 18l1 1 2-2"></path>
+      </svg>
+      <span>Tasks</span>
+      <span id="nav-tasks-badge" class="bottom-nav-badge" hidden></span>
+    </button>
+    <button class="bottom-nav-btn" data-view="stats" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4 20V10"></path><path d="M10 20V4"></path><path d="M16 20v-7"></path><path d="M22 20H2"></path>
+      </svg>
+      <span>Stats</span>
+    </button>
+  </nav>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden>
     <span id="toast-text" class="toast-text"></span>
