@@ -109,3 +109,11 @@ test('story points: picker on the task form, score card and a daily target setti
   assert.match(app, /store\.pointsSummary\(\)/);
   assert.match(app, /daily_points_goal: parseInt\(settingPointsGoalInput\.value, 10\)/);
 });
+
+test('ambient sound sits under the timer, and the desktop timer tab leaves review and insights to Stats', () => {
+  const html = read('index.html');
+  const center = html.slice(html.indexOf('<section class="panel center-stage">'), html.indexOf('<!-- Right Panel'));
+  assert.ok(center.includes('class="panel-card ambient-card"'), 'ambient card is in the center column');
+  const css = read('style.css');
+  assert.match(css, /body\[data-view="timer"\] \.review-card,\s*body\[data-view="timer"\] \.insights-card \{\s*display: none;/);
+});

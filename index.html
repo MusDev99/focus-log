@@ -76,7 +76,7 @@
 
     <!-- 3-Column Grid Dashboard -->
     <main class="dashboard-grid">
-      <!-- Left Panel: Tasks & Ambient Sound -->
+      <!-- Left Panel: Tasks -->
       <aside class="panel left-panel">
         <!-- Task Tracker -->
         <section class="panel-card task-card" aria-label="Session Tasks">
@@ -164,38 +164,9 @@
           </div>
           <div id="task-empty-state" class="task-empty-state">No tasks yet. Add one to set your intention.</div>
         </section>
-
-        <!-- Ambient Sound Generator -->
-        <section class="panel-card ambient-card" aria-label="Ambient Soundscape">
-          <div class="card-header">
-            <h2 class="card-title">Ambient Sound</h2>
-            <span id="sound-status-pill" class="pill-badge muted">Muted</span>
-          </div>
-
-          <div class="sound-presets">
-            <button class="sound-chip" data-sound="rain" type="button">
-              <span class="chip-icon">🌧️</span>
-              <span class="chip-label">Soft Rain</span>
-            </button>
-            <button class="sound-chip" data-sound="brown" type="button">
-              <span class="chip-icon">🌊</span>
-              <span class="chip-label">Deep Hum</span>
-            </button>
-            <button class="sound-chip" data-sound="forest" type="button">
-              <span class="chip-icon">🍃</span>
-              <span class="chip-label">Forest Breeze</span>
-            </button>
-          </div>
-
-          <div class="volume-slider-group">
-            <span class="volume-icon">🔈</span>
-            <input id="ambient-volume" type="range" min="0" max="1" step="0.05" value="0.5" aria-label="Ambient Volume">
-            <span class="volume-icon">🔊</span>
-          </div>
-        </section>
       </aside>
 
-      <!-- Center Stage: Timer Card -->
+      <!-- Center Stage: Timer and Ambient Sound -->
       <section class="panel center-stage">
         <div class="timer-card">
           <nav class="mode-tabs" aria-label="Timer Modes">
@@ -235,6 +206,35 @@
             </button>
           </div>
         </div>
+
+        <!-- Ambient Sound Generator -->
+        <section class="panel-card ambient-card" aria-label="Ambient Soundscape">
+          <div class="card-header">
+            <h2 class="card-title">Ambient Sound</h2>
+            <span id="sound-status-pill" class="pill-badge muted">Muted</span>
+          </div>
+
+          <div class="sound-presets">
+            <button class="sound-chip" data-sound="rain" type="button">
+              <span class="chip-icon">🌧️</span>
+              <span class="chip-label">Soft Rain</span>
+            </button>
+            <button class="sound-chip" data-sound="brown" type="button">
+              <span class="chip-icon">🌊</span>
+              <span class="chip-label">Deep Hum</span>
+            </button>
+            <button class="sound-chip" data-sound="forest" type="button">
+              <span class="chip-icon">🍃</span>
+              <span class="chip-label">Forest Breeze</span>
+            </button>
+          </div>
+
+          <div class="volume-slider-group">
+            <span class="volume-icon">🔈</span>
+            <input id="ambient-volume" type="range" min="0" max="1" step="0.05" value="0.5" aria-label="Ambient Volume">
+            <span class="volume-icon">🔊</span>
+          </div>
+        </section>
       </section>
 
       <!-- Right Panel: Analytics & Insights -->
