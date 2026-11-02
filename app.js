@@ -289,6 +289,28 @@ const navTasksBadgeEl = document.getElementById('nav-tasks-badge');
 
 let tasks = [];
 
+// Covey's time-management matrix (Habit 3: Put First Things First)
+const QUADRANTS = {
+  1: { name: 'Do now', short: 'Do' },
+  2: { name: 'Schedule', short: 'Schedule' },
+  3: { name: 'Delegate', short: 'Delegate' },
+  4: { name: 'Drop', short: 'Drop' },
+};
+const TASK_VIEW_KEY = 'pomodoro-task-view';
+const taskMatrixEl = document.getElementById('task-matrix');
+const taskViewBtns = document.querySelectorAll('.task-view-btn');
+let taskView = 'list';
+
+function setTaskView(view) {
+  taskView = view === 'matrix' ? 'matrix' : 'list';
+  taskViewBtns.forEach(btn => btn.setAttribute('aria-pressed', String(btn.dataset.taskView === taskView)));
+  taskListEl.hidden = taskView !== 'list';
+  taskMatrixEl.hidden = taskView !== 'matrix';
+  try { localStorage.setItem(TASK_VIEW_KEY, taskView); } catch (e) { /* ignore */ }
+}
+
+taskViewBtns.forEach(btn => btn.addEventListener('click', () => setTaskView(btn.dataset.taskView)));
+
 function fetchTasks() {
   tasks = store.listTasks();
   syncActiveTaskPill();
@@ -399,14 +421,23 @@ function renderTasks() {
     main.className = 'task-main';
     main.appendChild(textSpan);
 
+    const meta = document.createElement('div');
+    meta.className = 'task-meta';
     const label = estimateLabel(task.actual, task.estimate);
     if (label) {
       const est = document.createElement('span');
       est.className = 'task-estimate-badge' + (task.estimate && task.actual > task.estimate ? ' over' : '');
       est.textContent = label;
       est.title = task.estimate ? `${task.actual} done of ${task.estimate} estimated` : `${task.actual} done`;
-      main.appendChild(est);
+      meta.appendChild(est);
     }
+    if (task.quadrant) {
+      const tag = document.createElement('span');
+      tag.className = `task-quadrant-tag q${task.quadrant}`;
+      tag.textContent = `Q${task.quadrant} · ${QUADRANTS[task.quadrant].short}`;
+      meta.appendChild(tag);
+    }
+    if (meta.children.length) main.appendChild(meta);
 
     li.appendChild(handle);
     li.appendChild(checkBtn);
@@ -416,7 +447,177 @@ function renderTasks() {
     taskListEl.appendChild(li);
   });
 
+  renderMatrix();
   updateTaskCounter();
+}
+
+/** Fill the unsorted tray and the four quadrants; tasks keep their list order inside each. */
+function renderMatrix() {
+  const lists = {};
+  taskMatrixEl.querySelectorAll('.quadrant-list').forEach((ul) => {
+    ul.innerHTML = '';
+    lists[ul.dataset.list] = ul;
+  });
+  const counts = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 };
+  tasks.forEach((task) => {
+    const q = task.quadrant || 0;
+    if (!task.completed) counts[q]++;
+    lists[q].appendChild(buildMatrixChip(task));
+  });
+  taskMatrixEl.querySelectorAll('.quadrant-count').forEach((el) => {
+    el.textContent = counts[el.dataset.count];
+  });
+  // Hide the tray once everything is sorted
+  taskMatrixEl.querySelector('.q0').classList.toggle('is-empty', !lists[0].children.length);
+}
+
+function buildMatrixChip(task) {
+  const li = document.createElement('li');
+  li.className = `matrix-chip${task.completed ? ' completed' : ''}${task.id === activeTaskId ? ' selected-task' : ''}`;
+  li.dataset.id = task.id;
+
+  const check = document.createElement('button');
+  check.type = 'button';
+  check.className = 'matrix-check';
+  check.setAttribute('aria-label', task.completed ? `Mark "${task.text}" incomplete` : `Mark "${task.text}" complete`);
+  check.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+  check.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!task.completed) {
+      const r = check.getBoundingClientRect();
+      celebrate('tiny', r.left + r.width / 2, r.top + r.height / 2);
+      buzz(15);
+    }
+    toggleTask(task.id, !task.completed);
+  });
+
+  const body = document.createElement('button');
+  body.type = 'button';
+  body.className = 'matrix-chip-body';
+  const where = task.quadrant ? `in Q${task.quadrant} ${QUADRANTS[task.quadrant].name}` : 'unsorted';
+  body.setAttribute('aria-label', `${task.text}, ${where}. Tap to focus on it, drag to move, or press 1 to 4 to move, 0 to unsort.`);
+  const title = document.createElement('span');
+  title.className = 'matrix-chip-text';
+  title.textContent = task.text;
+  body.appendChild(title);
+  const label = estimateLabel(task.actual, task.estimate);
+  if (label) {
+    const est = document.createElement('span');
+    est.className = 'matrix-chip-est';
+    est.textContent = label;
+    body.appendChild(est);
+  }
+  body.addEventListener('pointerdown', (e) => startQuadrantDrag(e, li, task));
+  body.addEventListener('contextmenu', (e) => e.preventDefault()); // long-press drags, no menu
+  body.addEventListener('click', () => {
+    if (li.dataset.dragged) return; // the click that ends a drag is not a tap
+    selectActiveTask(task);
+  });
+  body.addEventListener('keydown', (e) => {
+    if (!/^[0-4]$/.test(e.key) || e.ctrlKey || e.metaKey || e.altKey) return;
+    e.preventDefault();
+    e.stopPropagation(); // don't also switch timer modes with 1/2/3
+    moveToQuadrant(task.id, Number(e.key) || null, true);
+  });
+
+  li.append(check, body);
+  return li;
+}
+
+function moveToQuadrant(id, quadrant, refocus = false) {
+  const task = tasks.find(t => t.id === id);
+  if (!task || (task.quadrant || null) === quadrant) return;
+  store.updateTask(id, { quadrant });
+  fetchTasks();
+  buzz(10);
+  if (refocus) {
+    const body = taskMatrixEl.querySelector(`[data-id="${CSS.escape(id)}"] .matrix-chip-body`);
+    if (body) body.focus();
+  }
+}
+
+/**
+ * Drag a chip to another quadrant. A mouse drag starts after a few pixels of movement; on touch
+ * it starts after a short press so the page can still scroll when you swipe over the matrix.
+ */
+function startQuadrantDrag(e, li, task) {
+  if (e.button !== 0) return;
+  const pointerId = e.pointerId;
+  const startX = e.clientX;
+  const startY = e.clientY;
+  const isTouch = e.pointerType !== 'mouse';
+  let ghost = null;
+  let target = null;
+  let pressTimer = null;
+  delete li.dataset.dragged;
+
+  const zoneAt = (x, y) => {
+    const el = document.elementFromPoint(x, y);
+    return el ? el.closest('.task-matrix .quadrant') : null;
+  };
+  const begin = (x, y) => {
+    li.dataset.dragged = '1';
+    const r = li.getBoundingClientRect();
+    ghost = li.cloneNode(true);
+    ghost.classList.add('matrix-ghost');
+    ghost.style.width = `${r.width}px`;
+    ghost.dataset.offsetX = x - r.left;
+    ghost.dataset.offsetY = y - r.top;
+    document.body.appendChild(ghost);
+    li.classList.add('drag-source');
+    taskMatrixEl.classList.add('is-dragging');
+    buzz(12);
+    follow(x, y);
+  };
+  const follow = (x, y) => {
+    ghost.style.transform = `translate(${x - ghost.dataset.offsetX}px, ${y - ghost.dataset.offsetY}px) rotate(-2deg)`;
+    const zone = zoneAt(x, y);
+    if (zone !== target) {
+      if (target) target.classList.remove('drop-target');
+      target = zone;
+      if (target) target.classList.add('drop-target');
+    }
+  };
+  const onMove = (ev) => {
+    if (ev.pointerId !== pointerId) return;
+    const moved = Math.hypot(ev.clientX - startX, ev.clientY - startY);
+    if (!ghost) {
+      if (isTouch) {
+        if (moved > 10) cleanup(); // a swipe: let the page scroll
+        return;
+      }
+      if (moved < 6) return;
+      begin(ev.clientX, ev.clientY);
+    }
+    follow(ev.clientX, ev.clientY);
+  };
+  // While dragging on touch, stop the browser from scrolling instead of moving the chip
+  const blockScroll = (ev) => { if (ghost) ev.preventDefault(); };
+  const onEnd = (ev) => {
+    if (ev.pointerId !== pointerId) return;
+    const dropZone = ghost && ev.type === 'pointerup' ? target : null;
+    cleanup();
+    if (dropZone) moveToQuadrant(task.id, Number(dropZone.dataset.quadrant) || null);
+  };
+  function cleanup() {
+    clearTimeout(pressTimer);
+    document.removeEventListener('pointermove', onMove);
+    document.removeEventListener('pointerup', onEnd);
+    document.removeEventListener('pointercancel', onEnd);
+    document.removeEventListener('touchmove', blockScroll);
+    if (target) target.classList.remove('drop-target');
+    if (ghost) ghost.remove();
+    li.classList.remove('drag-source');
+    taskMatrixEl.classList.remove('is-dragging');
+    // Let the click that follows pointerup see the flag, then clear it
+    setTimeout(() => { delete li.dataset.dragged; }, 0);
+  }
+
+  document.addEventListener('pointermove', onMove);
+  document.addEventListener('pointerup', onEnd);
+  document.addEventListener('pointercancel', onEnd);
+  document.addEventListener('touchmove', blockScroll, { passive: false });
+  if (isTouch) pressTimer = setTimeout(() => begin(startX, startY), 280);
 }
 
 function syncActiveTaskPill() {
@@ -445,8 +646,8 @@ function toggleTask(id, completed) {
   store.updateTask(id, { completed });
   fetchTasks();
   if (completed) {
-    const li = taskListEl.querySelector(`[data-id="${CSS.escape(id)}"]`);
-    if (li) li.classList.add('just-completed');
+    document.querySelectorAll(`#task-list [data-id="${CSS.escape(id)}"], #task-matrix [data-id="${CSS.escape(id)}"]`)
+      .forEach(el => el.classList.add('just-completed'));
   }
 }
 
@@ -1194,6 +1395,7 @@ bottomNavBtns.forEach((btn) => btn.addEventListener('click', () => setView(btn.d
 (function init() {
   updateDisplay();
   try { setView(localStorage.getItem(VIEW_KEY)); } catch (e) { setView('timer'); }
+  try { setTaskView(localStorage.getItem(TASK_VIEW_KEY)); } catch (e) { setTaskView('list'); }
   loadSettings();
   fetchTasks();
   loadStats();

@@ -271,3 +271,32 @@ test('dayDetail totals one local day and splits it by task', () => {
   ]);
   assert.deepEqual(store.dayDetail('2026-10-01'), { date: '2026-10-01', minutes: 0, sessions: 0, tasks: [] });
 });
+
+test('tasks carry an Eisenhower quadrant (1-4) or null when unsorted', () => {
+  const { store } = makeStore();
+  const a = store.addTask('Pay rent', 0, 1);
+  const b = store.addTask('Plan the week');
+  store.addTask('Bad quadrant', 0, 7);
+  assert.deepEqual(store.listTasks().map((t) => t.quadrant), [1, null, null]);
+
+  assert.equal(store.updateTask(b.id, { quadrant: 2 }), true);
+  assert.equal(store.listTasks()[1].quadrant, 2);
+  store.updateTask(b.id, { quadrant: 9 });
+  assert.equal(store.listTasks()[1].quadrant, null, 'invalid quadrant means unsorted');
+  store.updateTask(a.id, { completed: true });
+  assert.equal(store.listTasks()[0].quadrant, 1, 'other updates keep the quadrant');
+  store.updateTask(a.id, { quadrant: null });
+  assert.equal(store.listTasks()[0].quadrant, null);
+});
+
+test('quadrants survive backup and old tasks without one read as unsorted', () => {
+  const { store, storage } = makeStore();
+  storage.setItem(S.KEYS.tasks, JSON.stringify([{ id: 'old', text: 'Legacy', completed: false, estimate: 0, created_at: '2026-01-01T00:00:00Z' }]));
+  assert.equal(store.listTasks()[0].quadrant, null);
+
+  store.addTask('Exercise', 0, 2);
+  const backup = store.exportBackup();
+  const other = makeStore().store;
+  other.importBackup(backup);
+  assert.deepEqual(other.listTasks().map((t) => [t.text, t.quadrant]), [['Legacy', null], ['Exercise', 2]]);
+});

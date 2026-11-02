@@ -91,7 +91,45 @@
             </button>
           </form>
 
+          <div class="task-view-toggle" role="group" aria-label="Task view">
+            <button class="task-view-btn" data-task-view="list" type="button" aria-pressed="true">List</button>
+            <button class="task-view-btn" data-task-view="matrix" type="button" aria-pressed="false">Matrix</button>
+          </div>
+
           <ul id="task-list" class="task-list"></ul>
+
+          <!-- Covey's time-management matrix (Habit 3: Put First Things First). Drag tasks between quadrants. -->
+          <div id="task-matrix" class="task-matrix" hidden>
+            <section class="quadrant q0" data-quadrant="0" aria-label="Unsorted tasks">
+              <header class="quadrant-head"><span class="quadrant-title">Unsorted</span><span class="quadrant-count" data-count="0">0</span></header>
+              <ul class="quadrant-list" data-list="0"></ul>
+              <p class="quadrant-hint">Drag a task into a quadrant. On a keyboard, focus it and press <kbd>1</kbd>–<kbd>4</kbd>.</p>
+              <p class="quadrant-done">All sorted ✓ Drop a task here to unsort it.</p>
+            </section>
+            <div class="quadrant-axis" aria-hidden="true"><span>Urgent</span><span>Not urgent</span></div>
+            <div class="quadrant-grid">
+              <section class="quadrant q1" data-quadrant="1" aria-label="Quadrant 1: Do now, Urgent · Important">
+                <header class="quadrant-head"><span class="quadrant-num">Q1</span><span class="quadrant-title">Do now</span><span class="quadrant-count" data-count="1">0</span></header>
+                <p class="quadrant-desc">Urgent · Important</p>
+                <ul class="quadrant-list" data-list="1"></ul>
+              </section>
+              <section class="quadrant q2" data-quadrant="2" aria-label="Quadrant 2: Schedule, Not urgent · Important">
+                <header class="quadrant-head"><span class="quadrant-num">Q2</span><span class="quadrant-title">Schedule</span><span class="quadrant-count" data-count="2">0</span></header>
+                <p class="quadrant-desc">Not urgent · Important</p>
+                <ul class="quadrant-list" data-list="2"></ul>
+              </section>
+              <section class="quadrant q3" data-quadrant="3" aria-label="Quadrant 3: Delegate, Urgent · Not important">
+                <header class="quadrant-head"><span class="quadrant-num">Q3</span><span class="quadrant-title">Delegate</span><span class="quadrant-count" data-count="3">0</span></header>
+                <p class="quadrant-desc">Urgent · Not important</p>
+                <ul class="quadrant-list" data-list="3"></ul>
+              </section>
+              <section class="quadrant q4" data-quadrant="4" aria-label="Quadrant 4: Drop, Not urgent · Not important">
+                <header class="quadrant-head"><span class="quadrant-num">Q4</span><span class="quadrant-title">Drop</span><span class="quadrant-count" data-count="4">0</span></header>
+                <p class="quadrant-desc">Not urgent · Not important</p>
+                <ul class="quadrant-list" data-list="4"></ul>
+              </section>
+            </div>
+          </div>
           <div id="task-empty-state" class="task-empty-state">No tasks yet. Add one to set your intention.</div>
         </section>
 

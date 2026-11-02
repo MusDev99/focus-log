@@ -1454,6 +1454,301 @@ button.heat-cell:hover { transform: scale(1.25); }
   }
 }
 
+/* Task view switch: List / Matrix */
+.task-view-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  background: var(--surface-muted);
+}
+
+.task-view-btn {
+  min-height: 36px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.task-view-btn[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--text-main);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+.task-list[hidden],
+.task-matrix[hidden] {
+  display: none;
+}
+
+/* Quadrant colours */
+.q1 { --q: #e8677c; }
+.q2 { --q: #4fae84; }
+.q3 { --q: #e3a04f; }
+.q4 { --q: #8c96a8; }
+.q0 { --q: var(--text-muted); }
+
+.task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.task-quadrant-tag {
+  font-size: 0.7rem;
+  font-weight: 700;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--q) 75%, var(--text-main));
+  background: color-mix(in srgb, var(--q) 16%, transparent);
+}
+
+/* Covey matrix (Habit 3: Put First Things First) */
+.task-matrix {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quadrant {
+  position: relative;
+  padding: 10px;
+  border-radius: 16px;
+  border: 1.5px solid transparent;
+  background: color-mix(in srgb, var(--q) 11%, var(--surface-soft));
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.quadrant.q0 {
+  border: 1.5px dashed color-mix(in srgb, var(--q) 40%, transparent);
+  background: var(--surface-soft);
+}
+
+.quadrant.drop-target {
+  border-color: var(--q);
+  background: color-mix(in srgb, var(--q) 22%, var(--surface-soft));
+  transform: scale(1.02);
+}
+
+.quadrant-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.quadrant-num {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--q);
+  color: #fff;
+  font-size: 0.68rem;
+}
+
+.quadrant-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--q) 70%, var(--text-main));
+}
+
+.q2 .quadrant-title::after {
+  content: ' ★';
+}
+
+.quadrant-count {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.quadrant-desc {
+  margin: 2px 0 8px;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.quadrant-hint,
+.quadrant-done {
+  margin: 6px 0 0;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.quadrant-done,
+.q0.is-empty .quadrant-hint {
+  display: none;
+}
+
+.q0.is-empty .quadrant-done {
+  display: block;
+  margin: 2px 0 0;
+}
+
+.quadrant-axis {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 4px;
+  text-align: center;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.quadrant-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.quadrant-grid .quadrant {
+  min-height: 132px;
+}
+
+.quadrant-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 8px;
+}
+
+.q0 .quadrant-list:not(:empty) {
+  margin-top: 8px;
+}
+
+.matrix-chip {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 8px 6px 6px;
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  font-size: 0.8rem;
+  line-height: 1.3;
+}
+
+.matrix-chip.selected-task {
+  box-shadow: 0 0 0 2px var(--theme-accent);
+}
+
+.matrix-check {
+  position: relative;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border: 2px solid #cbd5e1;
+  border-radius: 50%;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* 36px tap area around the small circle */
+.matrix-check::before {
+  content: '';
+  position: absolute;
+  inset: -9px;
+}
+
+.matrix-check svg {
+  width: 11px;
+  height: 11px;
+  stroke: transparent;
+}
+
+.matrix-chip.completed .matrix-check {
+  background: var(--q, var(--theme-accent));
+  border-color: transparent;
+}
+
+.matrix-chip.completed .matrix-check svg {
+  stroke: #fff;
+}
+
+.matrix-chip.just-completed .matrix-check {
+  animation: check-pop 0.35s ease;
+}
+
+.matrix-chip-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-main);
+  font: inherit;
+  text-align: left;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.matrix-chip-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.matrix-chip.completed .matrix-chip-text {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.matrix-chip-est {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.matrix-chip.drag-source {
+  opacity: 0.35;
+}
+
+.matrix-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1150;
+  margin: 0;
+  list-style: none;
+  pointer-events: none;
+  box-shadow: 0 14px 28px -8px rgba(0, 0, 0, 0.3);
+}
+
+.task-matrix.is-dragging,
+.task-matrix.is-dragging * {
+  cursor: grabbing;
+}
+
 /* Day details under the 7-day chart and the heatmap */
 .day-detail {
   margin: 12px 0 4px;

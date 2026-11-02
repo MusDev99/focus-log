@@ -94,6 +94,8 @@
   const BACKUP_APP = 'pomodoro-focus-dashboard';
   const BACKUP_VERSION = 1;
 
+  /** Eisenhower/Covey quadrant: 1 urgent+important, 2 important, 3 urgent, 4 neither; null = not sorted yet. */
+  const cleanQuadrant = (q) => (Number.isInteger(q) && q >= 1 && q <= 4 ? q : null);
   const clampEstimate = (n) => (Number.isInteger(n) ? Math.min(MAX_ESTIMATE, Math.max(0, n)) : 0);
 
   /** A task from an imported backup, normalised, or null if unusable. */
@@ -106,6 +108,7 @@
       text: t.text.trim().slice(0, MAX_TASK_LENGTH),
       completed: t.completed === true,
       estimate: clampEstimate(t.estimate),
+      quadrant: cleanQuadrant(t.quadrant),
       created_at: Number.isNaN(created) ? new Date(0).toISOString() : new Date(created).toISOString(),
     };
   }
@@ -187,14 +190,14 @@
       focusSessions().forEach((s) => {
         if (s.task_id != null) counts[s.task_id] = (counts[s.task_id] || 0) + 1;
       });
-      return rawTasks().map((t) => ({ ...t, actual: counts[t.id] || 0 }));
+      return rawTasks().map((t) => ({ ...t, quadrant: cleanQuadrant(t.quadrant), actual: counts[t.id] || 0 }));
     }
 
-    function addTask(text, estimate = 0) {
+    function addTask(text, estimate = 0, quadrant = null) {
       const clean = typeof text === 'string' ? text.trim().slice(0, MAX_TASK_LENGTH) : '';
       if (!clean) return null;
       const est = Number.isInteger(estimate) ? Math.min(MAX_ESTIMATE, Math.max(0, estimate)) : 0;
-      const task = { id: newId(), text: clean, completed: false, estimate: est, created_at: now().toISOString() };
+      const task = { id: newId(), text: clean, completed: false, estimate: est, quadrant: cleanQuadrant(quadrant), created_at: now().toISOString() };
       write(KEYS.tasks, rawTasks().concat(task));
       return task;
     }
@@ -208,6 +211,7 @@
         if (typeof fields.completed === 'boolean') next.completed = fields.completed;
         if (typeof fields.text === 'string' && fields.text.trim()) next.text = fields.text.trim().slice(0, MAX_TASK_LENGTH);
         if (Number.isInteger(fields.estimate)) next.estimate = Math.min(MAX_ESTIMATE, Math.max(0, fields.estimate));
+        if ('quadrant' in fields) next.quadrant = cleanQuadrant(fields.quadrant);
         return next;
       });
       if (found) write(KEYS.tasks, tasks);

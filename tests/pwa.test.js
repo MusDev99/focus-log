@@ -81,3 +81,14 @@ test('phones get a bottom tab bar for timer, tasks and stats', () => {
   assert.match(css, /body\[data-view="stats"\] \.center-stage/);
   assert.match(css, /@media \(min-width: 720px\) \{\s*\.bottom-nav \{\s*display: none;/);
 });
+
+test('tasks can be shown as a Covey matrix with an unsorted tray and four quadrants', () => {
+  const html = read('index.html');
+  assert.match(html, /data-task-view="list"/);
+  assert.match(html, /data-task-view="matrix"/);
+  [0, 1, 2, 3, 4].forEach((q) => {
+    assert.match(html, new RegExp(`data-quadrant="${q}"`));
+    assert.match(html, new RegExp(`data-list="${q}"`));
+  });
+  assert.match(read('app.js'), /store\.updateTask\(id, \{ quadrant \}\)/);
+});
