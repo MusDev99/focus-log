@@ -71,7 +71,7 @@ test('page has the toast, confetti layer and day-detail panels the app drives', 
   assert.doesNotMatch(html, /id="heatmap"[^>]*role="img"/, 'heatmap days are buttons now, not an image');
 });
 
-test('phones get a bottom tab bar for timer, tasks and stats', () => {
+test('section tabs for timer, tasks and stats: bottom bar on phones, header tabs on desktop', () => {
   const html = read('index.html');
   ['timer', 'tasks', 'stats'].forEach((view) => {
     assert.match(html, new RegExp(`class="bottom-nav-btn" data-view="${view}"`));
@@ -79,7 +79,8 @@ test('phones get a bottom tab bar for timer, tasks and stats', () => {
   assert.match(html, /<body[^>]*data-view="timer"/);
   const css = read('style.css');
   assert.match(css, /body\[data-view="stats"\] \.center-stage/);
-  assert.match(css, /@media \(min-width: 720px\) \{\s*\.bottom-nav \{\s*display: none;/);
+  assert.match(html, /<header class="dashboard-topbar">[\s\S]*<nav class="bottom-nav"[\s\S]*<\/header>/, 'tabs live in the header');
+  assert.match(css, /body\[data-view="tasks"\] \.right-panel,\s*body\[data-view="stats"\] \.left-panel \{\s*display: none;/);
 });
 
 test('tasks can be shown as a Covey matrix with an unsorted tray and four quadrants', () => {
@@ -91,4 +92,8 @@ test('tasks can be shown as a Covey matrix with an unsorted tray and four quadra
     assert.match(html, new RegExp(`data-list="${q}"`));
   });
   assert.match(read('app.js'), /store\.updateTask\(id, \{ quadrant \}\)/);
+});
+
+test('service worker revalidates with the server so a new deploy shows up right away', () => {
+  assert.match(read('sw.js'), /fetch\(req, \{ cache: 'no-cache' \}\)/);
 });
