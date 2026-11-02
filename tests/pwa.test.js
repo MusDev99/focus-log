@@ -97,3 +97,15 @@ test('tasks can be shown as a Covey matrix with an unsorted tray and four quadra
 test('service worker revalidates with the server so a new deploy shows up right away', () => {
   assert.match(read('sw.js'), /fetch\(req, \{ cache: 'no-cache' \}\)/);
 });
+
+test('story points: picker on the task form, score card and a daily target setting', () => {
+  const html = read('index.html');
+  assert.match(html, /<select id="task-points"[^>]*aria-label="Story points \(optional\)"/);
+  ['score-ring', 'score-today', 'score-target-btn', 'score-target-form', 'score-chart', 'score-done-list'].forEach((id) => {
+    assert.ok(html.includes(`id="${id}"`), `#${id} exists`);
+  });
+  assert.match(html, /<input id="setting-points-goal" type="number" min="1" max="500"/);
+  const app = read('app.js');
+  assert.match(app, /store\.pointsSummary\(\)/);
+  assert.match(app, /daily_points_goal: parseInt\(settingPointsGoalInput\.value, 10\)/);
+});

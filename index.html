@@ -105,6 +105,16 @@
               title="Estimated pomodoros"
               aria-label="Estimated pomodoros"
             />
+            <select id="task-points" class="task-points" title="Story points (optional)" aria-label="Story points (optional)">
+              <option value="0">SP</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="5">5</option>
+              <option value="8">8</option>
+              <option value="13">13</option>
+              <option value="21">21</option>
+            </select>
             <button id="add-task-btn" class="task-add-btn" type="submit" aria-label="Add Task">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -229,6 +239,59 @@
 
       <!-- Right Panel: Analytics & Insights -->
       <aside class="panel right-panel">
+        <section class="panel-card score-card" aria-label="Story points">
+          <div class="card-header">
+            <h2 class="card-title">Story Points</h2>
+            <div class="streak-badge score-streak" title="Days in a row you hit your points target">
+              🎯 <span id="score-streak">0</span>d on target
+            </div>
+          </div>
+
+          <div class="score-hero">
+            <div id="score-ring" class="score-ring" role="progressbar" aria-label="Today's story points against your daily target" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <svg viewBox="0 0 120 120" aria-hidden="true">
+                <circle class="score-ring-track" cx="60" cy="60" r="52"></circle>
+                <circle id="score-ring-fill" class="score-ring-fill" cx="60" cy="60" r="52"></circle>
+              </svg>
+              <div class="score-ring-label">
+                <span id="score-today" class="score-today">0</span>
+                <span id="score-of" class="score-of">of 10 SP</span>
+              </div>
+            </div>
+            <div class="score-side">
+              <p id="score-message" class="score-message">Complete a task with story points to score.</p>
+              <button id="score-target-btn" class="pill-badge score-target-btn" type="button" aria-label="Change daily points target">
+                Daily target: <span id="score-target">10</span> SP ✎
+              </button>
+              <form id="score-target-form" class="score-target-form" hidden>
+                <input id="score-target-input" type="number" min="1" max="500" required aria-label="Daily story points target">
+                <button class="score-target-save" type="submit">Save</button>
+              </form>
+            </div>
+          </div>
+
+          <dl class="review-facts score-facts">
+            <div><dt>This week</dt><dd id="score-week">0 SP</dd></div>
+            <div><dt>Still open</dt><dd id="score-open">0 SP</dd></div>
+          </dl>
+
+          <div class="chart-container score-chart-container">
+            <div class="chart-header">
+              <span class="chart-title">Last 7 Days</span>
+              <span id="score-week-compare" class="chart-subtitle">— the week before</span>
+            </div>
+            <div id="score-chart" class="bar-chart-bars score-chart" role="img" aria-label="Story points for the last 7 days"></div>
+          </div>
+
+          <div class="score-done">
+            <div class="chart-header">
+              <span class="chart-title">Scored today</span>
+            </div>
+            <ul id="score-done-list" class="score-done-list"></ul>
+            <div id="score-done-empty" class="task-empty-state visible">Nothing scored yet today.</div>
+          </div>
+        </section>
+
         <section class="panel-card analytics-card" aria-label="Focus Analytics">
           <div class="card-header">
             <h2 class="card-title">Focus Analytics</h2>
@@ -339,6 +402,10 @@
         <div class="setting-item">
           <label for="setting-goal">Daily Goal (sessions)</label>
           <input id="setting-goal" type="number" min="1" max="24" value="4" required>
+        </div>
+        <div class="setting-item">
+          <label for="setting-points-goal">Daily Target (story points)</label>
+          <input id="setting-points-goal" type="number" min="1" max="500" value="10" required>
         </div>
         <div class="setting-item">
           <label for="setting-autostart">Auto-start next session</label>

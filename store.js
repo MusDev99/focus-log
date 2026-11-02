@@ -10,6 +10,7 @@
   const KEYS = { tasks: 'pomodoro-tasks', sessions: 'pomodoro-sessions', settings: 'pomodoro-settings' };
   const MAX_TASK_LENGTH = 80;
   const MAX_ESTIMATE = 20;
+  const MAX_POINTS = 100;
   const MAX_SESSION_SECONDS = 24 * 60 * 60;
   const TOP_TASKS_LIMIT = 10;
   const VALID_MODES = ['focus', 'shortBreak', 'longBreak'];
@@ -21,6 +22,7 @@
     long_break_interval: 4,
     auto_start: 0,
     daily_goal: 4,
+    daily_points_goal: 10,
     theme: 'light',
   };
 
@@ -32,6 +34,7 @@
     long_break_interval: [1, 10],
     auto_start: [0, 1],
     daily_goal: [1, 24],
+    daily_points_goal: [1, 500],
     theme: ['light', 'dark'],
   };
 
@@ -97,19 +100,25 @@
   /** Eisenhower/Covey quadrant: 1 urgent+important, 2 important, 3 urgent, 4 neither; null = not sorted yet. */
   const cleanQuadrant = (q) => (Number.isInteger(q) && q >= 1 && q <= 4 ? q : null);
   const clampEstimate = (n) => (Number.isInteger(n) ? Math.min(MAX_ESTIMATE, Math.max(0, n)) : 0);
+  /** Optional story points; 0 = not scored. */
+  const cleanPoints = (n) => (Number.isInteger(n) ? Math.min(MAX_POINTS, Math.max(0, n)) : 0);
 
   /** A task from an imported backup, normalised, or null if unusable. */
   function cleanTask(t) {
     if (!t || typeof t !== 'object' || typeof t.text !== 'string' || !t.text.trim()) return null;
     if (typeof t.id !== 'string' && typeof t.id !== 'number') return null;
     const created = Date.parse(t.created_at);
+    const done = Date.parse(t.completed_at);
+    const completed = t.completed === true;
     return {
       id: String(t.id),
       text: t.text.trim().slice(0, MAX_TASK_LENGTH),
-      completed: t.completed === true,
+      completed,
       estimate: clampEstimate(t.estimate),
       quadrant: cleanQuadrant(t.quadrant),
+      points: cleanPoints(t.points),
       created_at: Number.isNaN(created) ? new Date(0).toISOString() : new Date(created).toISOString(),
+      completed_at: completed && !Number.isNaN(done) ? new Date(done).toISOString() : null,
     };
   }
 
@@ -190,14 +199,19 @@
       focusSessions().forEach((s) => {
         if (s.task_id != null) counts[s.task_id] = (counts[s.task_id] || 0) + 1;
       });
-      return rawTasks().map((t) => ({ ...t, quadrant: cleanQuadrant(t.quadrant), actual: counts[t.id] || 0 }));
+      return rawTasks().map((t) => ({
+        ...t, quadrant: cleanQuadrant(t.quadrant), points: cleanPoints(t.points),
+        completed_at: t.completed_at || null, actual: counts[t.id] || 0,
+      }));
     }
 
-    function addTask(text, estimate = 0, quadrant = null) {
+    function addTask(text, estimate = 0, quadrant = null, points = 0) {
       const clean = typeof text === 'string' ? text.trim().slice(0, MAX_TASK_LENGTH) : '';
       if (!clean) return null;
-      const est = Number.isInteger(estimate) ? Math.min(MAX_ESTIMATE, Math.max(0, estimate)) : 0;
-      const task = { id: newId(), text: clean, completed: false, estimate: est, quadrant: cleanQuadrant(quadrant), created_at: now().toISOString() };
+      const task = {
+        id: newId(), text: clean, completed: false, estimate: clampEstimate(estimate), quadrant: cleanQuadrant(quadrant),
+        points: cleanPoints(points), created_at: now().toISOString(), completed_at: null,
+      };
       write(KEYS.tasks, rawTasks().concat(task));
       return task;
     }
@@ -208,10 +222,15 @@
         if (t.id !== id) return t;
         found = true;
         const next = { ...t };
-        if (typeof fields.completed === 'boolean') next.completed = fields.completed;
+        if (typeof fields.completed === 'boolean' && fields.completed !== (t.completed === true)) {
+          next.completed = fields.completed;
+          // points count on the day the task was finished
+          next.completed_at = fields.completed ? now().toISOString() : null;
+        }
         if (typeof fields.text === 'string' && fields.text.trim()) next.text = fields.text.trim().slice(0, MAX_TASK_LENGTH);
         if (Number.isInteger(fields.estimate)) next.estimate = Math.min(MAX_ESTIMATE, Math.max(0, fields.estimate));
         if ('quadrant' in fields) next.quadrant = cleanQuadrant(fields.quadrant);
+        if ('points' in fields) next.points = cleanPoints(fields.points);
         return next;
       });
       if (found) write(KEYS.tasks, tasks);
@@ -449,6 +468,48 @@
       };
     }
 
+    /**
+     * Story points scored per local day (a task scores its points on the day it was completed):
+     * today vs the daily target, the last 7 days, days-on-target streak and points still open.
+     */
+    function pointsSummary() {
+      const today = now();
+      const goal = getSettings().daily_points_goal;
+      const perDayPoints = {};
+      const todayKey = localDayKey(today);
+      const todayTasks = [];
+      let open = 0;
+      rawTasks().forEach((t) => {
+        const points = cleanPoints(t.points);
+        if (!points) return;
+        if (t.completed !== true) { open += points; return; }
+        const at = Date.parse(t.completed_at);
+        if (Number.isNaN(at)) return; // finished before points were tracked
+        const key = localDayKey(new Date(at));
+        perDayPoints[key] = (perDayPoints[key] || 0) + points;
+        if (key === todayKey) todayTasks.push({ id: String(t.id), text: t.text, points, at });
+      });
+      const pointsOn = (d) => perDayPoints[localDayKey(d)] || 0;
+      const daily = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = addDays(today, -i);
+        daily.push({ date: localDayKey(d), label: d.toLocaleDateString('en-US', { weekday: 'short' }), points: pointsOn(d) });
+      }
+      let lastWeek = 0;
+      for (let i = 7; i <= 13; i++) lastWeek += pointsOn(addDays(today, -i));
+      const onTarget = Object.keys(perDayPoints).filter((k) => perDayPoints[k] >= goal);
+      return {
+        today: pointsOn(today),
+        goal,
+        week_total: daily.reduce((acc, d) => acc + d.points, 0),
+        last_week_total: lastWeek,
+        streak: computeStreak(onTarget, today),
+        open_points: open,
+        daily_breakdown: daily,
+        today_tasks: todayTasks.sort((a, b) => a.at - b.at).map(({ at, ...rest }) => rest),
+      };
+    }
+
     /** Full session history as CSV text (local timestamps, task title resolved). */
     function sessionsCsv() {
       const titles = {};
@@ -465,7 +526,7 @@
 
     return {
       getSettings, saveSettings, listTasks, addTask, updateTask, deleteTask, restoreTask, reorderTasks,
-      logSession, summary, taskStats, heatmap, dayDetail, weeklyReview, sessionsCsv, exportBackup, importBackup,
+      logSession, summary, pointsSummary, taskStats, heatmap, dayDetail, weeklyReview, sessionsCsv, exportBackup, importBackup,
     };
   }
 

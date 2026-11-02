@@ -11,6 +11,7 @@ let config = {
   long_break_interval: 4,
   auto_start: 0,
   daily_goal: 4,
+  daily_points_goal: 10,
   theme: 'light'
 };
 
@@ -282,6 +283,7 @@ function restoreTimerState() {
 const taskFormEl = document.getElementById('task-form');
 const taskInputEl = document.getElementById('task-input');
 const taskEstimateEl = document.getElementById('task-estimate');
+const taskPointsEl = document.getElementById('task-points');
 const taskListEl = document.getElementById('task-list');
 const taskCounterEl = document.getElementById('task-counter');
 const taskEmptyStateEl = document.getElementById('task-empty-state');
@@ -315,7 +317,10 @@ function fetchTasks() {
   tasks = store.listTasks();
   syncActiveTaskPill();
   renderTasks();
+  loadScore();
 }
+
+const pointsLabel = (points) => `${points} SP`;
 
 function updateTaskCounter() {
   const total = tasks.length;
@@ -431,6 +436,13 @@ function renderTasks() {
       est.title = task.estimate ? `${task.actual} done of ${task.estimate} estimated` : `${task.actual} done`;
       meta.appendChild(est);
     }
+    if (task.points) {
+      const sp = document.createElement('span');
+      sp.className = 'task-points-badge';
+      sp.textContent = pointsLabel(task.points);
+      sp.title = `${task.points} story points`;
+      meta.appendChild(sp);
+    }
     if (task.quadrant) {
       const tag = document.createElement('span');
       tag.className = `task-quadrant-tag q${task.quadrant}`;
@@ -506,6 +518,12 @@ function buildMatrixChip(task) {
     est.className = 'matrix-chip-est';
     est.textContent = label;
     body.appendChild(est);
+  }
+  if (task.points) {
+    const sp = document.createElement('span');
+    sp.className = 'matrix-chip-est matrix-chip-points';
+    sp.textContent = pointsLabel(task.points);
+    body.appendChild(sp);
   }
   body.addEventListener('pointerdown', (e) => startQuadrantDrag(e, li, task));
   body.addEventListener('contextmenu', (e) => e.preventDefault()); // long-press drags, no menu
@@ -638,17 +656,31 @@ function selectActiveTask(task) {
   saveTimerState();
 }
 
-function addTask(text, estimate = 0) {
-  if (store.addTask(text, estimate)) fetchTasks();
+function addTask(text, estimate = 0, points = 0) {
+  if (store.addTask(text, estimate, null, points)) fetchTasks();
 }
 
 function toggleTask(id, completed) {
+  const task = tasks.find(t => t.id === id);
+  const before = store.pointsSummary().today;
   store.updateTask(id, { completed });
   fetchTasks();
-  if (completed) {
-    document.querySelectorAll(`#task-list [data-id="${CSS.escape(id)}"], #task-matrix [data-id="${CSS.escape(id)}"]`)
-      .forEach(el => el.classList.add('just-completed'));
+  if (!completed) return;
+  document.querySelectorAll(`#task-list [data-id="${CSS.escape(id)}"], #task-matrix [data-id="${CSS.escape(id)}"]`)
+    .forEach(el => el.classList.add('just-completed'));
+  if (!task || !task.points) return;
+
+  // Scored task: show the new total, celebrate crossing the daily target, and offer an undo
+  const { today, goal } = store.pointsSummary();
+  const targetJustHit = before < goal && today >= goal;
+  if (targetJustHit) {
+    celebrate('big');
+    buzz([30, 60, 30]);
   }
+  showToast(targetJustHit ? `🎯 Target hit — ${today} SP today!` : `+${task.points} SP · ${today}/${goal} today`, {
+    label: 'Undo',
+    onClick: () => toggleTask(id, false),
+  });
 }
 
 /** Delete straight away, with an Undo in the toast that puts the task back where it was. */
@@ -684,7 +716,19 @@ function startTaskEdit(li, task) {
   input.value = task.text;
   input.maxLength = 80;
   input.setAttribute('aria-label', 'Edit task');
-  textSpan.replaceWith(input);
+  // Story points can be changed while editing, next to the title
+  const points = taskPointsEl.cloneNode(true);
+  points.removeAttribute('id');
+  points.className = 'task-points task-edit-points';
+  if (task.points && !points.querySelector(`option[value="${task.points}"]`)) {
+    points.add(new Option(String(task.points), String(task.points)));
+  }
+  points.value = String(task.points || 0);
+
+  const row = document.createElement('div');
+  row.className = 'task-edit-row';
+  row.append(input, points);
+  textSpan.replaceWith(row);
   input.focus();
   input.select();
 
@@ -692,12 +736,14 @@ function startTaskEdit(li, task) {
   const finish = (save) => {
     if (finished) return;
     finished = true;
-    if (save && input.value.trim() && input.value.trim() !== task.text) {
-      store.updateTask(task.id, { text: input.value });
+    if (save) {
+      const fields = { points: parseInt(points.value, 10) || 0 };
+      if (input.value.trim() && input.value.trim() !== task.text) fields.text = input.value;
+      store.updateTask(task.id, fields);
     }
     fetchTasks();
   };
-  input.addEventListener('keydown', (e) => {
+  row.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       finish(true);
@@ -706,7 +752,10 @@ function startTaskEdit(li, task) {
       finish(false);
     }
   });
-  input.addEventListener('blur', () => finish(true));
+  // Moving between the title and the points picker keeps editing; leaving both saves
+  row.addEventListener('focusout', (e) => {
+    if (!row.contains(e.relatedTarget)) finish(true);
+  });
 }
 
 function focusTaskHandle(id) {
@@ -762,9 +811,10 @@ function startTaskDrag(e, li) {
 taskFormEl.addEventListener('submit', (e) => {
   e.preventDefault();
   const estimate = Math.min(20, Math.max(0, parseInt(taskEstimateEl.value, 10) || 0));
-  addTask(taskInputEl.value, estimate);
+  addTask(taskInputEl.value, estimate, parseInt(taskPointsEl.value, 10) || 0);
   taskInputEl.value = '';
   taskEstimateEl.value = '';
+  taskPointsEl.value = '0';
 });
 
 // ====================================================
@@ -833,6 +883,122 @@ function loadStats() {
   renderReview(store.weeklyReview());
   loadInsights();
 }
+
+// ---- Story points score ----
+const scoreRingEl = document.getElementById('score-ring');
+const scoreRingFillEl = document.getElementById('score-ring-fill');
+const scoreTodayEl = document.getElementById('score-today');
+const scoreOfEl = document.getElementById('score-of');
+const scoreMessageEl = document.getElementById('score-message');
+const scoreStreakEl = document.getElementById('score-streak');
+const scoreTargetEl = document.getElementById('score-target');
+const scoreTargetBtn = document.getElementById('score-target-btn');
+const scoreTargetForm = document.getElementById('score-target-form');
+const scoreTargetInput = document.getElementById('score-target-input');
+const scoreWeekEl = document.getElementById('score-week');
+const scoreOpenEl = document.getElementById('score-open');
+const scoreWeekCompareEl = document.getElementById('score-week-compare');
+const scoreChartEl = document.getElementById('score-chart');
+const scoreDoneListEl = document.getElementById('score-done-list');
+const scoreDoneEmptyEl = document.getElementById('score-done-empty');
+const RING_LENGTH = 2 * Math.PI * 52;
+
+function loadScore() {
+  const p = store.pointsSummary();
+  const g = goalProgress(p.today, p.goal);
+
+  scoreTodayEl.textContent = p.today;
+  scoreOfEl.textContent = `of ${p.goal} SP`;
+  scoreTargetEl.textContent = p.goal;
+  scoreStreakEl.textContent = p.streak;
+  scoreRingFillEl.style.strokeDasharray = String(RING_LENGTH);
+  scoreRingFillEl.style.strokeDashoffset = String(RING_LENGTH * (1 - g.percent / 100));
+  scoreRingEl.setAttribute('aria-valuenow', String(g.percent));
+  scoreRingEl.setAttribute('aria-valuetext', `${p.today} of ${p.goal} story points`);
+  scoreRingEl.classList.toggle('reached', g.reached);
+  if (g.reached) {
+    scoreMessageEl.textContent = p.today > p.goal ? `🎉 Target hit, ${p.today - p.goal} SP over!` : '🎉 Target hit — nice work!';
+  } else if (p.today === 0) {
+    scoreMessageEl.textContent = p.open_points ? `${p.open_points} SP waiting in your tasks. Finish one to score.` : 'Give a task story points, then finish it to score.';
+  } else {
+    scoreMessageEl.textContent = `${p.goal - p.today} SP to go`;
+  }
+
+  scoreWeekEl.textContent = pointsLabel(p.week_total);
+  scoreOpenEl.textContent = pointsLabel(p.open_points);
+  const diff = p.week_total - p.last_week_total;
+  scoreWeekCompareEl.textContent = `${diff > 0 ? '▲' : diff < 0 ? '▼' : '='} vs ${p.last_week_total} SP the week before`;
+
+  renderScoreChart(p.daily_breakdown, p.goal);
+
+  scoreDoneListEl.innerHTML = '';
+  p.today_tasks.forEach((t) => {
+    const li = document.createElement('li');
+    const text = document.createElement('span');
+    text.className = 'score-done-text';
+    text.textContent = t.text;
+    const pts = document.createElement('span');
+    pts.className = 'score-done-points';
+    pts.textContent = `+${t.points}`;
+    li.append(text, pts);
+    scoreDoneListEl.appendChild(li);
+  });
+  scoreDoneEmptyEl.classList.toggle('visible', p.today_tasks.length === 0);
+}
+
+/** 7 bars of points per day with a dashed line at the daily target. */
+function renderScoreChart(days, goal) {
+  scoreChartEl.innerHTML = '';
+  const max = Math.max(goal, ...days.map(d => d.points), 1);
+  scoreChartEl.style.setProperty('--target', `${Math.round((goal / max) * 100)}%`);
+  scoreChartEl.setAttribute('aria-label', `Story points for the last 7 days, target ${goal}: ` +
+    days.map(d => `${d.label} ${d.points}`).join(', '));
+  days.forEach((day) => {
+    const col = document.createElement('div');
+    col.className = 'chart-bar-col';
+    const wrap = document.createElement('div');
+    wrap.className = 'chart-bar-fill-wrap';
+    const bar = document.createElement('div');
+    bar.className = `chart-bar-fill${day.points >= goal ? ' hit' : ''}`;
+    bar.style.height = day.points ? `${Math.max(4, Math.round((day.points / max) * 100))}%` : '0';
+    bar.title = `${day.label}: ${day.points} SP`;
+    wrap.appendChild(bar);
+    const label = document.createElement('span');
+    label.className = 'chart-bar-label';
+    label.textContent = day.label;
+    col.append(wrap, label);
+    scoreChartEl.appendChild(col);
+  });
+}
+
+function closeScoreTarget() {
+  scoreTargetForm.hidden = true;
+  scoreTargetBtn.hidden = false;
+}
+
+scoreTargetBtn.addEventListener('click', () => {
+  scoreTargetInput.value = config.daily_points_goal;
+  scoreTargetBtn.hidden = true;
+  scoreTargetForm.hidden = false;
+  scoreTargetInput.focus();
+  scoreTargetInput.select();
+});
+
+scoreTargetForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  config = { ...config, ...store.saveSettings({ daily_points_goal: parseInt(scoreTargetInput.value, 10) }) };
+  fillSettingsForm();
+  closeScoreTarget();
+  loadScore();
+  scoreTargetBtn.focus();
+});
+
+scoreTargetInput.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  e.preventDefault();
+  closeScoreTarget();
+  scoreTargetBtn.focus();
+});
 
 // ---- Weekly review ----
 const reviewChangeEl = document.getElementById('review-change');
@@ -1099,6 +1265,7 @@ const settingShortInput = document.getElementById('setting-short');
 const settingLongInput = document.getElementById('setting-long');
 const settingIntervalInput = document.getElementById('setting-interval');
 const settingGoalInput = document.getElementById('setting-goal');
+const settingPointsGoalInput = document.getElementById('setting-points-goal');
 const settingAutoStartInput = document.getElementById('setting-autostart');
 
 let lastFocusedBeforeModal = null;
@@ -1147,6 +1314,7 @@ function fillSettingsForm() {
   settingLongInput.value = config.long_break;
   settingIntervalInput.value = config.long_break_interval;
   settingGoalInput.value = config.daily_goal;
+  settingPointsGoalInput.value = config.daily_points_goal;
   settingAutoStartInput.checked = Boolean(config.auto_start);
 }
 
@@ -1165,12 +1333,14 @@ settingsForm.addEventListener('submit', (e) => {
     long_break: parseInt(settingLongInput.value, 10),
     long_break_interval: parseInt(settingIntervalInput.value, 10),
     daily_goal: parseInt(settingGoalInput.value, 10),
+    daily_points_goal: parseInt(settingPointsGoalInput.value, 10),
     auto_start: settingAutoStartInput.checked ? 1 : 0
   };
 
   config = { ...config, ...store.saveSettings(updated) };
   closeSettings();
   renderGoal();
+  loadScore();
   if (!isRunning) {
     switchMode(currentMode);
   }

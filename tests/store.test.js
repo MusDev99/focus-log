@@ -300,3 +300,82 @@ test('quadrants survive backup and old tasks without one read as unsorted', () =
   other.importBackup(backup);
   assert.deepEqual(other.listTasks().map((t) => [t.text, t.quadrant]), [['Legacy', null], ['Exercise', 2]]);
 });
+
+test('tasks carry optional story points, clamped to 0-100', () => {
+  const { store } = makeStore();
+  const a = store.addTask('Ship login', 2, null, 5);
+  store.addTask('No points');
+  store.addTask('Too big', 0, null, 500);
+  assert.deepEqual(store.listTasks().map((t) => t.points), [5, 0, 100]);
+  store.updateTask(a.id, { points: 8 });
+  assert.equal(store.listTasks()[0].points, 8);
+  store.updateTask(a.id, { text: 'Ship login page' });
+  assert.equal(store.listTasks()[0].points, 8, 'other updates keep the points');
+});
+
+test('completing a task stamps completed_at; reopening clears it', () => {
+  const { store, clock } = makeStore();
+  const a = store.addTask('Write tests', 0, null, 3);
+  assert.equal(store.listTasks()[0].completed_at, null);
+  store.updateTask(a.id, { completed: true });
+  const stamp = store.listTasks()[0].completed_at;
+  assert.equal(stamp, clock.t.toISOString());
+  clock.t = new Date(2026, 9, 29, 9, 0, 0);
+  store.updateTask(a.id, { completed: true });
+  assert.equal(store.listTasks()[0].completed_at, stamp, 'completing again keeps the first time');
+  store.updateTask(a.id, { completed: false });
+  assert.equal(store.listTasks()[0].completed_at, null);
+});
+
+test('pointsSummary scores points on the day a task was completed', () => {
+  const { store, clock, storage } = makeStore(new Date(2026, 9, 26, 10, 0, 0));
+  store.saveSettings({ daily_points_goal: 5 });
+  const done = (text, points) => store.updateTask(store.addTask(text, 0, null, points).id, { completed: true });
+  done('Mon task', 5); // Oct 26: on target
+  clock.t = new Date(2026, 9, 27, 10, 0, 0);
+  done('Tue a', 3);
+  done('Tue b', 2); // Oct 27: on target
+  clock.t = new Date(2026, 9, 28, 9, 0, 0);
+  done('Wed a', 2);
+  clock.t = new Date(2026, 9, 28, 11, 0, 0);
+  done('Wed b', 1);
+  store.addTask('Open', 0, null, 8);
+  store.addTask('Open, unscored');
+  // a task completed before points were tracked has no completed_at
+  const legacy = JSON.parse(storage.getItem(S.KEYS.tasks)).concat({ id: 'x', text: 'Legacy', completed: true, points: 13 });
+  storage.setItem(S.KEYS.tasks, JSON.stringify(legacy));
+
+  const p = store.pointsSummary();
+  assert.equal(p.today, 3);
+  assert.equal(p.goal, 5);
+  assert.equal(p.week_total, 13);
+  assert.equal(p.open_points, 8);
+  assert.equal(p.streak, 2, 'today is not on target yet, so the streak runs to yesterday');
+  assert.deepEqual(p.today_tasks.map((t) => [t.text, t.points]), [['Wed a', 2], ['Wed b', 1]]);
+  assert.equal(p.daily_breakdown.length, 7);
+  assert.deepEqual(p.daily_breakdown.slice(-3).map((d) => d.points), [5, 5, 3]);
+});
+
+test('points and completion time survive backup and undo', () => {
+  const { store } = makeStore();
+  const a = store.addTask('Review PR', 0, 1, 3);
+  store.updateTask(a.id, { completed: true });
+  const task = store.listTasks()[0];
+  const other = makeStore().store;
+  other.importBackup(store.exportBackup());
+  assert.equal(other.listTasks()[0].points, 3);
+  assert.equal(other.listTasks()[0].completed_at, task.completed_at);
+  assert.equal(other.pointsSummary().today, 3);
+
+  store.deleteTask(a.id);
+  store.restoreTask(task, 0);
+  assert.equal(store.pointsSummary().today, 3);
+});
+
+test('daily points target is a setting between 1 and 500', () => {
+  const { store } = makeStore();
+  assert.equal(store.getSettings().daily_points_goal, 10);
+  assert.equal(store.saveSettings({ daily_points_goal: 21 }).daily_points_goal, 21);
+  assert.equal(store.saveSettings({ daily_points_goal: 0 }).daily_points_goal, 21);
+  assert.equal(store.saveSettings({ daily_points_goal: 501 }).daily_points_goal, 21);
+});
