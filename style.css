@@ -1491,6 +1491,27 @@ button.heat-cell:hover { transform: scale(1.25); }
     padding: 36px 32px 42px;
   }
 
+  /* Ambient sound sits under the timer: presets in one row */
+  .center-stage .sound-presets {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .center-stage .sound-chip {
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    padding: 10px 6px;
+    text-align: center;
+  }
+
+  .center-stage .sound-chip .chip-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
   .timer-circle {
     width: 290px;
     height: 290px;
@@ -1499,9 +1520,46 @@ button.heat-cell:hover { transform: scale(1.25); }
 
 /* Desktop: three columns, timer in the middle */
 @media (min-width: 1100px) {
+  /* Use the screen: wider page, slimmer outer margins */
+  .dashboard-wrapper {
+    max-width: 1680px;
+    padding: calc(20px + env(safe-area-inset-top, 0px)) 28px 32px;
+  }
+
+  .dashboard-topbar {
+    margin-bottom: 20px;
+  }
+
   .dashboard-grid {
-    grid-template-columns: 320px minmax(0, 1fr) 320px;
-    gap: 24px;
+    grid-template-columns: minmax(340px, 1.2fr) minmax(400px, 1.1fr) minmax(300px, 0.9fr);
+    gap: 20px;
+  }
+
+  .panel {
+    gap: 20px;
+  }
+
+  /* Timer tab = the focus desk: tasks | timer + sound | today's score and focus.
+     Weekly review and insights live in the Stats tab. */
+  body[data-view="timer"] .review-card,
+  body[data-view="timer"] .insights-card {
+    display: none;
+  }
+
+  /* Timer stays in view while the side columns scroll */
+  body[data-view="timer"] .center-stage {
+    position: sticky;
+    top: 20px;
+  }
+
+  body[data-view="timer"] .task-list {
+    max-height: min(560px, calc(100vh - 300px));
+  }
+
+  /* Timer and sound share the width in the side column of Tasks / Stats */
+  body[data-view="tasks"] .ambient-card,
+  body[data-view="stats"] .ambient-card {
+    display: none;
   }
 
   .center-stage {
@@ -2299,6 +2357,7 @@ button.heat-cell:hover { transform: scale(1.25); }
 }
 
 .score-target-btn {
+  white-space: nowrap;
   border: none;
   cursor: pointer;
   font-family: inherit;
@@ -2428,5 +2487,26 @@ button.heat-cell:hover { transform: scale(1.25); }
 
   .score-today {
     font-size: 1.6rem;
+  }
+}
+
+/* Narrow task card (desktop side column, small phones): title gets its own row */
+.task-card {
+  container-type: inline-size;
+}
+
+@container (max-width: 380px) {
+  .task-form {
+    flex-wrap: wrap;
+  }
+
+  .task-form .task-input {
+    flex: 1 1 100%;
+  }
+
+  .task-form .task-estimate,
+  .task-form .task-points {
+    flex: 1;
+    width: auto;
   }
 }
