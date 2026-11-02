@@ -1410,8 +1410,64 @@ button.heat-cell:hover { transform: scale(1.25); }
 
 /* Tablet: timer full width on top, panels below in two columns */
 @media (min-width: 720px) {
+  /* Section tabs move into the header as a segmented control */
+  .dashboard-topbar {
+    flex-wrap: wrap;
+  }
+
   .bottom-nav {
+    position: static;
+    order: 3;
+    flex-basis: 100%;
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    background: var(--surface-soft);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  }
+
+  .bottom-nav-btn {
+    flex: 1;
+    max-width: 160px;
+    flex-direction: row;
+    gap: 8px;
+    min-height: 40px;
+    padding: 0 16px;
+    border-radius: 12px;
+    font-size: 0.86rem;
+  }
+
+  .bottom-nav-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .bottom-nav-btn[aria-current="page"] svg {
+    transform: none;
+  }
+
+  .bottom-nav-btn:not([aria-current="page"]):hover {
+    color: var(--text-main);
+    background: var(--surface-muted);
+  }
+
+  .bottom-nav-badge {
+    position: static;
+    margin-left: -2px;
+  }
+
+  /* Tasks / Stats: timer stays on top, the chosen section takes the full width below */
+  body[data-view="tasks"] .right-panel,
+  body[data-view="stats"] .left-panel {
     display: none;
+  }
+
+  body[data-view="tasks"] .left-panel,
+  body[data-view="stats"] .right-panel {
+    grid-column: 1 / -1;
   }
 
   .dashboard-wrapper {
@@ -1451,6 +1507,107 @@ button.heat-cell:hover { transform: scale(1.25); }
   .center-stage {
     grid-column: auto;
     order: 0;
+  }
+
+  .dashboard-topbar {
+    flex-wrap: nowrap;
+  }
+
+  .bottom-nav {
+    order: 0;
+    flex: 0 1 420px;
+  }
+
+  /* Tasks / Stats: timer in a side column, the chosen section fills the rest */
+  body[data-view="tasks"] .dashboard-grid,
+  body[data-view="stats"] .dashboard-grid {
+    grid-template-columns: 380px minmax(0, 1fr);
+  }
+
+  body[data-view="tasks"] .center-stage,
+  body[data-view="stats"] .center-stage {
+    order: -1;
+    position: sticky;
+    top: 24px;
+  }
+
+  body[data-view="tasks"] .left-panel,
+  body[data-view="stats"] .right-panel {
+    grid-column: auto;
+  }
+
+  /* Roomy matrix when it has the width */
+  body[data-view="tasks"] .quadrant-grid {
+    gap: 12px;
+  }
+
+  body[data-view="tasks"] .quadrant-axis {
+    gap: 12px;
+  }
+
+  body[data-view="tasks"] .quadrant-grid .quadrant {
+    min-height: 220px;
+    padding: 14px;
+  }
+
+  body[data-view="tasks"] .quadrant-head {
+    font-size: 0.9rem;
+  }
+
+  body[data-view="tasks"] .quadrant-desc {
+    font-size: 0.75rem;
+  }
+
+  body[data-view="tasks"] .matrix-chip {
+    font-size: 0.88rem;
+    padding: 8px 10px 8px 8px;
+  }
+
+  body[data-view="tasks"] .task-list {
+    max-height: none;
+  }
+
+  /* Stats cards side by side */
+  body[data-view="stats"] .right-panel {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  /* Insights runs full width: heatmap on the left, focus-by-task beside it */
+  body[data-view="stats"] .insights-card {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 520px) minmax(0, 1fr);
+    column-gap: 32px;
+    align-items: start;
+  }
+
+  body[data-view="stats"] .insights-card > .card-header {
+    grid-column: 1 / -1;
+  }
+
+  body[data-view="stats"] .insights-card > .chart-header:not(.by-task-header),
+  body[data-view="stats"] .insights-card > .heatmap,
+  body[data-view="stats"] .insights-card > #heatmap-detail {
+    grid-column: 1;
+  }
+
+  body[data-view="stats"] .insights-card > .by-task-header,
+  body[data-view="stats"] .insights-card > .task-stats,
+  body[data-view="stats"] .insights-card > #task-stats-empty {
+    grid-column: 2;
+    grid-row: 2 / span 3;
+  }
+
+  body[data-view="stats"] .insights-card > .by-task-header {
+    grid-row: 2;
+    margin-top: 0;
+  }
+
+  body[data-view="stats"] .insights-card > .task-stats,
+  body[data-view="stats"] .insights-card > #task-stats-empty {
+    grid-row: 3 / span 2;
   }
 }
 
