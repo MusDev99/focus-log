@@ -1310,8 +1310,110 @@ button.heat-cell:hover { transform: scale(1.25); }
   font-size: clamp(1.1rem, 5vw, 1.5rem);
 }
 
+/* Phones: bottom tab bar shows one section at a time */
+.bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 90;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+  background: var(--card-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid var(--card-border);
+  box-shadow: 0 -8px 24px -12px rgba(0, 0, 0, 0.15);
+}
+
+.bottom-nav-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 52px;
+  border: 0;
+  border-radius: 14px;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.bottom-nav-btn svg {
+  width: 22px;
+  height: 22px;
+  transition: transform 0.2s ease;
+}
+
+.bottom-nav-btn[aria-current="page"] {
+  color: var(--theme-accent);
+  background: var(--theme-accent-light);
+}
+
+.bottom-nav-btn[aria-current="page"] svg {
+  transform: translateY(-1px) scale(1.08);
+}
+
+.bottom-nav-badge {
+  position: absolute;
+  top: 4px;
+  left: calc(50% + 6px);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--theme-accent);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+.bottom-nav-badge[hidden] {
+  display: none;
+}
+
+@media (max-width: 719px) {
+  .dashboard-wrapper {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  }
+
+  body[data-view="timer"] .left-panel,
+  body[data-view="timer"] .right-panel,
+  body[data-view="tasks"] .center-stage,
+  body[data-view="tasks"] .right-panel,
+  body[data-view="stats"] .center-stage,
+  body[data-view="stats"] .left-panel {
+    display: none;
+  }
+
+  .dashboard-grid > .panel {
+    animation: view-in 0.22s ease;
+  }
+
+}
+
+@keyframes view-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
 /* Tablet: timer full width on top, panels below in two columns */
 @media (min-width: 720px) {
+  .bottom-nav {
+    display: none;
+  }
+
   .dashboard-wrapper {
     padding: calc(24px + env(safe-area-inset-top, 0px)) 32px 48px;
   }
@@ -1579,5 +1681,12 @@ button.heat-cell:hover { transform: scale(1.25); }
   .icon-action-btn:hover,
   .primary-btn:hover {
     transform: none;
+  }
+}
+
+/* Keep toasts above the phone tab bar (after the base .toast rule so it wins) */
+@media (max-width: 719px) {
+  .toast {
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
   }
 }

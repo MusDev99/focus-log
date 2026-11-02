@@ -35,6 +35,7 @@ const startIconEl = document.getElementById('start-icon');
 const resetBtnEl = document.getElementById('reset-btn');
 const tabButtons = document.querySelectorAll('.tab-btn');
 const progressCircle = document.querySelector('.progress-ring-circle');
+const navTimerLabelEl = document.getElementById('nav-timer-label');
 
 // Progress ring setup
 const radius = progressCircle.r.baseVal.value;
@@ -58,9 +59,16 @@ function updateDisplay() {
 
   const percent = ((totalDuration - timeLeft) / totalDuration) * 100;
   setProgress(percent);
+  updateNavTimer();
+}
+
+/** On phones the Timer tab shows the countdown while it runs, so it stays visible from other tabs. */
+function updateNavTimer() {
+  navTimerLabelEl.textContent = isRunning ? formatTime(timeLeft) : 'Timer';
 }
 
 function setButtonState(running) {
+  updateNavTimer();
   if (running) {
     startTextEl.textContent = 'Pause';
     startIconEl.innerHTML = '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>';
@@ -277,6 +285,7 @@ const taskEstimateEl = document.getElementById('task-estimate');
 const taskListEl = document.getElementById('task-list');
 const taskCounterEl = document.getElementById('task-counter');
 const taskEmptyStateEl = document.getElementById('task-empty-state');
+const navTasksBadgeEl = document.getElementById('nav-tasks-badge');
 
 let tasks = [];
 
@@ -290,6 +299,9 @@ function updateTaskCounter() {
   const total = tasks.length;
   const completed = tasks.filter(t => t.completed).length;
   taskCounterEl.textContent = `${completed}/${total}`;
+  const open = total - completed;
+  navTasksBadgeEl.hidden = open === 0;
+  navTasksBadgeEl.textContent = open;
   if (total === 0) {
     taskEmptyStateEl.classList.add('visible');
   } else {
@@ -1157,9 +1169,31 @@ function drawConfetti() {
   if (!confettiFrame) ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
 }
 
+// ====================================================
+// Phone bottom tabs: Timer / Tasks / Stats (CSS ignores data-view from 720px up)
+// ====================================================
+const VIEW_KEY = 'pomodoro-view';
+const VIEWS = ['timer', 'tasks', 'stats'];
+const bottomNavBtns = document.querySelectorAll('.bottom-nav-btn');
+
+function setView(view) {
+  if (!VIEWS.includes(view)) view = 'timer';
+  const changed = bodyEl.dataset.view !== view;
+  bodyEl.dataset.view = view;
+  bottomNavBtns.forEach((btn) => {
+    if (btn.dataset.view === view) btn.setAttribute('aria-current', 'page');
+    else btn.removeAttribute('aria-current');
+  });
+  if (changed) window.scrollTo(0, 0);
+  try { localStorage.setItem(VIEW_KEY, view); } catch (e) { /* ignore */ }
+}
+
+bottomNavBtns.forEach((btn) => btn.addEventListener('click', () => setView(btn.dataset.view)));
+
 // Initialization: settings first (durations depend on them), then restore the timer
 (function init() {
   updateDisplay();
+  try { setView(localStorage.getItem(VIEW_KEY)); } catch (e) { setView('timer'); }
   loadSettings();
   fetchTasks();
   loadStats();

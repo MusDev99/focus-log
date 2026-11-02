@@ -70,3 +70,14 @@ test('page has the toast, confetti layer and day-detail panels the app drives', 
   assert.match(html, /<canvas id="confetti"[^>]*aria-hidden="true"/);
   assert.doesNotMatch(html, /id="heatmap"[^>]*role="img"/, 'heatmap days are buttons now, not an image');
 });
+
+test('phones get a bottom tab bar for timer, tasks and stats', () => {
+  const html = read('index.html');
+  ['timer', 'tasks', 'stats'].forEach((view) => {
+    assert.match(html, new RegExp(`class="bottom-nav-btn" data-view="${view}"`));
+  });
+  assert.match(html, /<body[^>]*data-view="timer"/);
+  const css = read('style.css');
+  assert.match(css, /body\[data-view="stats"\] \.center-stage/);
+  assert.match(css, /@media \(min-width: 720px\) \{\s*\.bottom-nav \{\s*display: none;/);
+});
