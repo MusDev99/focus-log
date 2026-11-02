@@ -1,6 +1,6 @@
 // Service worker: caches the app shell so the dashboard opens offline.
 // Paths are relative to this file so it also works under a subpath (e.g. GitHub Pages).
-const CACHE = 'pomodoro-shell-v6';
+const CACHE = 'pomodoro-shell-v7';
 const SHELL = [
   './',
   './index.html',
