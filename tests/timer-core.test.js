@@ -122,3 +122,31 @@ test('estimateLabel shows actual/estimate, plain count, or nothing', () => {
   assert.equal(T.estimateLabel(0, 0), '');
   assert.equal(T.estimateLabel(5, 4), '5/4 🍅'); // over-estimate still reported
 });
+
+test('taskTextParts splits text and http(s) links, dropping trailing punctuation', () => {
+  assert.deepEqual(T.taskTextParts('Review https://dev-log-minute-meeting.vercel.app/ today.'), [
+    { type: 'text', value: 'Review ' },
+    { type: 'link', href: 'https://dev-log-minute-meeting.vercel.app/', label: 'dev-log-minute-meeting.vercel.app' },
+    { type: 'text', value: ' today.' },
+  ]);
+  assert.deepEqual(T.taskTextParts('(see www.example.com/docs).'), [
+    { type: 'text', value: '(see ' },
+    { type: 'link', href: 'https://www.example.com/docs', label: 'example.com/docs' },
+    { type: 'text', value: ').' },
+  ]);
+  assert.deepEqual(T.taskTextParts('No links here'), [{ type: 'text', value: 'No links here' }]);
+  assert.deepEqual(T.taskTextParts('javascript:alert(1) ftp://x.y'), [{ type: 'text', value: 'javascript:alert(1) ftp://x.y' }]);
+});
+
+test('shortUrl keeps host and path and cuts long ones', () => {
+  assert.equal(T.shortUrl('https://www.github.com/MusDev99/pomodoro-app'), 'github.com/MusDev99/pomodoro-app');
+  assert.equal(T.shortUrl('https://example.com/' + 'a'.repeat(60)).length, 40);
+  assert.ok(T.shortUrl('https://example.com/' + 'a'.repeat(60)).endsWith('…'));
+});
+
+test('taskDisplayText and firstTaskLink', () => {
+  const text = 'Notes https://dev-log-minute-meeting.vercel.app/meetings/42 and https://example.com';
+  assert.equal(T.taskDisplayText(text), 'Notes dev-log-minute-meeting.vercel.app/meeti… and example.com');
+  assert.equal(T.firstTaskLink(text), 'https://dev-log-minute-meeting.vercel.app/meetings/42');
+  assert.equal(T.firstTaskLink('plain'), null);
+});

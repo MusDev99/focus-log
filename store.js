@@ -8,7 +8,7 @@
   }
 })(typeof self !== 'undefined' ? self : this, function () {
   const KEYS = { tasks: 'pomodoro-tasks', sessions: 'pomodoro-sessions', settings: 'pomodoro-settings' };
-  const MAX_TASK_LENGTH = 80;
+  const MAX_TASK_LENGTH = 200; // room for a link
   const MAX_ESTIMATE = 20;
   const MAX_POINTS = 100;
   const MAX_SESSION_SECONDS = 24 * 60 * 60;

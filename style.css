@@ -2510,3 +2510,60 @@ button.heat-cell:hover { transform: scale(1.25); }
     width: auto;
   }
 }
+
+/* Links inside task titles */
+.task-text {
+  overflow-wrap: anywhere;
+}
+
+.task-link {
+  color: var(--theme-accent);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  border-radius: 4px;
+}
+
+.task-link:hover {
+  text-decoration-thickness: 2px;
+}
+
+.task-link:focus-visible,
+.matrix-chip-link:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 2px;
+}
+
+.task-item.completed .task-link {
+  color: inherit;
+}
+
+.matrix-chip-link {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin: -2px -4px 0 0;
+  border-radius: 6px;
+  color: var(--theme-accent);
+}
+
+/* bigger touch target without a bigger icon */
+.matrix-chip-link::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
+.matrix-chip-link:hover {
+  background: var(--theme-accent-light);
+}
+
+.matrix-chip-link svg {
+  width: 14px;
+  height: 14px;
+}
