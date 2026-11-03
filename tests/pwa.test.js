@@ -47,13 +47,6 @@ test('index.html loads scripts with relative paths and app.js registers sw.js re
   assert.doesNotMatch(read('app.js'), /fetch\(['`]\/api/);
 });
 
-test('notifications go through the service worker and tapping one reopens the app', () => {
-  assert.match(read('app.js'), /reg\.showNotification\(/);
-  const sw = read('sw.js');
-  assert.match(sw, /addEventListener\('notificationclick'/);
-  assert.match(sw, /clients\.openWindow\(self\.registration\.scope\)/);
-});
-
 test('settings include backup export and import controls', () => {
   const html = read('index.html');
   ['export-backup-btn', 'import-backup-btn', 'import-backup-input'].forEach((id) => {
@@ -116,4 +109,23 @@ test('ambient sound sits under the timer, and the desktop timer tab leaves revie
   assert.ok(center.includes('class="panel-card ambient-card"'), 'ambient card is in the center column');
   const css = read('style.css');
   assert.match(css, /body\[data-view="timer"\] \.review-card,\s*body\[data-view="timer"\] \.insights-card \{\s*display: none;/);
+});
+
+test('timer card has only Work and Break, a cat scene per mode, and the Overview tab', () => {
+  const html = read('index.html');
+  assert.deepEqual([...html.matchAll(/class="tab-btn[^"]*" data-mode="(\w+)"/g)].map((m) => m[1]), ['work', 'break']);
+  assert.match(html, /<div id="cat-stage" class="cat-stage" data-mode="idle">/);
+  ['prop-work', 'prop-break', 'prop-idle'].forEach((c) => assert.ok(html.includes(`class="${c}"`), `${c} scene`));
+  assert.match(html, /<span id="nav-timer-label">Overview<\/span>/);
+  assert.doesNotMatch(html, /Short Break|Long Break|setting-focus|setting-autostart/);
+  const css = read('style.css');
+  ['work', 'break'].forEach((mode) => assert.ok(css.includes(`.cat-stage[data-mode="${mode}"]`), `${mode} animation rules`));
+  assert.match(css, /prefers-reduced-motion: reduce\) \{\s*\.cat-stage \* \{ animation: none/);
+});
+
+test('finished tasks get a Done bucket with Restore', () => {
+  const html = read('index.html');
+  assert.match(html, /class="panel-card done-card"/);
+  assert.match(html, /id="done-list"/);
+  assert.match(read('app.js'), /restore\.addEventListener\('click', \(\) => toggleTask\(task\.id, false\)\)/);
 });

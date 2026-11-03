@@ -188,7 +188,7 @@ test('importBackup rejects other files and skips invalid rows', () => {
     ...base,
     tasks: [{ id: 'ok', text: '  Valid  ', estimate: 99 }, { id: 'bad', text: '' }, 'junk', { text: 'no id' }],
     sessions: [
-      { id: 's1', mode: 'focus', duration_seconds: 600, completed_at: '2026-10-27T10:00:00Z', task_id: 'ok' },
+      { id: 's1', mode: 'focus', duration_seconds: 1500, completed_at: '2026-10-27T10:00:00Z', task_id: 'ok' },
       { id: 's2', mode: 'nap', duration_seconds: 600, completed_at: '2026-10-27T10:00:00Z' },
       { id: 's3', mode: 'focus', duration_seconds: -5, completed_at: '2026-10-27T10:00:00Z' },
       { id: 's4', mode: 'focus', duration_seconds: 600, completed_at: 'not a date' },
@@ -443,4 +443,58 @@ test('deleting the running task stops the clock; time survives undo and backup, 
   other.importBackup(store.exportBackup());
   assert.equal(other.listTasks()[0].elapsed_ms, 20000);
   assert.equal(other.runningTaskId(), null);
+});
+
+test('work and break stretches are logged as sessions when they end, and today totals add up live', () => {
+  const { store, clock } = makeStore();
+  const at = (s) => { clock.t = new Date(clock.t.getTime() + s * 1000); };
+  assert.deepEqual(store.getWorkState(), { mode: 'idle', since: null, task_id: null });
+  assert.deepEqual(store.todayTotals(), { mode: 'idle', task_id: null, stretch_ms: 0, work_ms: 0, break_ms: 0 });
+
+  const a = store.addTask('Task A');
+  store.setWorkMode('work', a.id);
+  at(600);
+  assert.equal(store.todayTotals().work_ms, 600000, 'the running stretch counts');
+  assert.equal(store.todayTotals().stretch_ms, 600000);
+
+  const work = store.setWorkMode('break'); // take a break: the work stretch is logged
+  assert.deepEqual([work.mode, work.duration_seconds, work.task_id], ['focus', 600, a.id]);
+  at(120);
+  assert.deepEqual([store.todayTotals().work_ms, store.todayTotals().break_ms], [600000, 120000]);
+
+  const rest = store.setWorkMode('work'); // back to work: the break is logged, work total keeps growing
+  assert.deepEqual([rest.mode, rest.duration_seconds, rest.task_id], ['shortBreak', 120, null]);
+  at(300);
+  assert.equal(store.todayTotals().work_ms, 900000);
+  assert.equal(store.todayTotals().break_ms, 120000);
+
+  store.setWorkMode('idle');
+  assert.equal(store.getWorkState().mode, 'idle');
+  assert.equal(store.todayTotals().work_ms, 900000);
+  assert.equal(store.summary().today_minutes, 15, 'stats see the work time');
+  assert.equal(store.setWorkMode('nap'), null);
+});
+
+test('switching task while working splits the stretch per task; sub-second stretches are dropped', () => {
+  const { store, clock } = makeStore();
+  const at = (s) => { clock.t = new Date(clock.t.getTime() + s * 1000); };
+  const a = store.addTask('Task A');
+  const b = store.addTask('Task B');
+  store.setWorkMode('work', a.id);
+  at(90);
+  store.setWorkMode('work', b.id);
+  at(30);
+  store.setWorkMode('work', null);
+  store.setWorkMode('idle'); // under a second: not logged
+  assert.deepEqual(store.taskStats().map((r) => [r.label, r.minutes]), [['Task A', 1.5], ['Task B', 0.5]]);
+  assert.equal(store.todayTotals().work_ms, 120000);
+});
+
+test('a task counts one pomodoro for every 25 minutes of work logged on it', () => {
+  const { store } = makeStore();
+  const a = store.addTask('Deep work', 3);
+  store.logSession({ task_id: a.id, duration_seconds: 24 * 60 });
+  assert.equal(store.listTasks()[0].actual, 0);
+  store.logSession({ task_id: a.id, duration_seconds: 27 * 60 });
+  assert.equal(store.listTasks()[0].actual, 2);
 });

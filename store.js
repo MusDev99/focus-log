@@ -7,10 +7,11 @@
     root.PomodoroStore = factory();
   }
 })(typeof self !== 'undefined' ? self : this, function () {
-  const KEYS = { tasks: 'pomodoro-tasks', sessions: 'pomodoro-sessions', settings: 'pomodoro-settings', clock: 'pomodoro-task-clock' };
+  const KEYS = { tasks: 'pomodoro-tasks', sessions: 'pomodoro-sessions', settings: 'pomodoro-settings', clock: 'pomodoro-task-clock', work: 'pomodoro-work-state' };
   const MAX_TASK_LENGTH = 200; // room for a link
   const MAX_ESTIMATE = 20;
   const MAX_POINTS = 100;
+  const POMODORO_SECONDS = 25 * 60; // one 🍅 of an estimate = 25 minutes of work
   const MAX_ELAPSED_MS = 1000 * 24 * 60 * 60 * 1000;
   const MAX_SESSION_SECONDS = 24 * 60 * 60;
   const TOP_TASKS_LIMIT = 10;
@@ -244,18 +245,74 @@
       return cleanElapsed((task.elapsed_ms || 0) + (clock && clock.task_id === id ? liveMs(clock) : 0));
     }
 
+    // ---- Work / break clock: one stretch runs at a time; ending it logs a session ----
+    /** {mode: 'work' | 'break' | 'idle', since (ms) | null, task_id | null} */
+    function getWorkState() {
+      const s = read(KEYS.work, null);
+      if (s && (s.mode === 'work' || s.mode === 'break') && Number.isFinite(s.since)) {
+        return { mode: s.mode, since: s.since, task_id: typeof s.task_id === 'string' ? s.task_id : null };
+      }
+      return { mode: 'idle', since: null, task_id: null };
+    }
+
+    /**
+     * End the current stretch (logged as a focus or break session) and start `mode` ('work', 'break' or
+     * 'idle'). Passing the mode that is already running restarts the stretch, which is how a work stretch
+     * is split when the task changes. Returns the session that was logged, or null.
+     */
+    function setWorkMode(mode, taskId = null) {
+      if (mode !== 'work' && mode !== 'break' && mode !== 'idle') return null;
+      const cur = getWorkState();
+      let logged = null;
+      if (cur.mode !== 'idle') {
+        const seconds = Math.min(MAX_SESSION_SECONDS, Math.round(liveMs({ since: cur.since }) / 1000));
+        if (seconds >= 1) {
+          logged = logSession({
+            mode: cur.mode === 'work' ? 'focus' : 'shortBreak',
+            duration_seconds: seconds,
+            task_id: cur.mode === 'work' ? cur.task_id : null,
+          });
+        }
+      }
+      write(KEYS.work, mode === 'idle' ? null : {
+        mode, since: now().getTime(), task_id: mode === 'work' && taskId != null ? String(taskId) : null,
+      });
+      return logged;
+    }
+
+    /** Today's cumulative work and break time (ms), including the stretch running right now. */
+    function todayTotals() {
+      const todayKey = localDayKey(now());
+      let work = 0;
+      let rest = 0;
+      rawSessions().forEach((s) => {
+        if (localDayKey(new Date(s.completed_at)) !== todayKey) return;
+        if (s.mode === 'focus') work += s.duration_seconds * 1000;
+        else rest += s.duration_seconds * 1000;
+      });
+      const cur = getWorkState();
+      const stretch = cur.mode === 'idle' ? 0 : liveMs({ since: cur.since });
+      return {
+        mode: cur.mode,
+        task_id: cur.task_id,
+        stretch_ms: stretch,
+        work_ms: work + (cur.mode === 'work' ? stretch : 0),
+        break_ms: rest + (cur.mode === 'break' ? stretch : 0),
+      };
+    }
+
     /** Tasks in creation order, each with `actual` = focus sessions logged against it. */
     function listTasks() {
-      const counts = {};
+      const seconds = {};
       focusSessions().forEach((s) => {
-        if (s.task_id != null) counts[s.task_id] = (counts[s.task_id] || 0) + 1;
+        if (s.task_id != null) seconds[s.task_id] = (seconds[s.task_id] || 0) + s.duration_seconds;
       });
       const clock = readClock();
       return rawTasks().map((t) => {
         const running = !!clock && clock.task_id === t.id && t.completed !== true;
         return {
           ...t, quadrant: cleanQuadrant(t.quadrant), points: cleanPoints(t.points),
-          completed_at: t.completed_at || null, actual: counts[t.id] || 0,
+          completed_at: t.completed_at || null, actual: Math.floor((seconds[t.id] || 0) / POMODORO_SECONDS),
           running, elapsed_ms: cleanElapsed((t.elapsed_ms || 0) + (running ? liveMs(clock) : 0)),
         };
       });
@@ -589,7 +646,7 @@
 
     return {
       getSettings, saveSettings, listTasks, addTask, updateTask, deleteTask, restoreTask, reorderTasks,
-      startTaskClock, pauseTaskClock, runningTaskId, taskElapsedMs, logSession, summary, pointsSummary, taskStats, heatmap, dayDetail, weeklyReview, sessionsCsv, exportBackup, importBackup,
+      startTaskClock, pauseTaskClock, runningTaskId, taskElapsedMs, getWorkState, setWorkMode, todayTotals, logSession, summary, pointsSummary, taskStats, heatmap, dayDetail, weeklyReview, sessionsCsv, exportBackup, importBackup,
     };
   }
 

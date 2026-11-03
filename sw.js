@@ -1,6 +1,6 @@
 // Service worker: caches the app shell so the dashboard opens offline.
 // Paths are relative to this file so it also works under a subpath (e.g. GitHub Pages).
-const CACHE = 'pomodoro-shell-v10';
+const CACHE = 'pomodoro-shell-v11';
 const SHELL = [
   './',
   './index.html',
@@ -47,16 +47,5 @@ self.addEventListener('fetch', (event) => {
         return res;
       })
       .catch(() => caches.match(req).then((hit) => hit || caches.match('./index.html')))
-  );
-});
-
-// Tapping an end-of-session notification brings the app back (or opens it).
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      const open = clients.find((c) => c.url.startsWith(self.registration.scope));
-      return open ? open.focus() : self.clients.openWindow(self.registration.scope);
-    })
   );
 });
