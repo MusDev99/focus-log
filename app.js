@@ -2,289 +2,171 @@
 // Pure timer helpers live in timer-core.js and the data layer in store.js (both unit-tested).
 
 const store = window.PomodoroStore.createStore(window.localStorage);
-const { heatLevel, heatmapCells, estimateLabel, taskTextParts, taskDisplayText, firstTaskLink, formatElapsed, modeDuration, remainingSeconds, nextMode, snapshot, restore, formatTime, goalProgress, shortcutAction, STORAGE_KEY } = window.TimerCore;
+const { heatLevel, heatmapCells, estimateLabel, taskTextParts, taskDisplayText, firstTaskLink, formatElapsed, goalProgress, shortcutAction } = window.TimerCore;
 
 let config = {
-  focus_duration: 25,
-  short_break: 5,
-  long_break: 15,
-  long_break_interval: 4,
-  auto_start: 0,
-  daily_goal: 4,
+  daily_goal: 4, // hours of work per day
   daily_points_goal: 10,
+  cat_sound: 1,
   theme: 'light'
 };
 
-let currentMode = 'focus';
-let totalDuration = modeDuration('focus', config);
-let timeLeft = totalDuration;
-let endsAt = null;
-let timerId = null;
-let isRunning = false;
-let completedFocusCycles = 0;
+let workMode = 'idle'; // 'work' | 'break' | 'idle', mirrors store.getWorkState()
 let activeTaskId = null;
-let todaySessions = 0;
+let todayWorkMs = 0;
+let goalReachedDay = null;
+let goalPrimed = false; // the first clock update after load must not celebrate a goal reached earlier
 
 // DOM Elements
 const bodyEl = document.body;
 const timeDisplayEl = document.getElementById('time-display');
 const modeStatusEl = document.getElementById('mode-status');
+const stretchLineEl = document.getElementById('stretch-line');
 const activeTaskPillEl = document.getElementById('active-task-pill');
 const startBtnEl = document.getElementById('start-btn');
 const startTextEl = document.getElementById('start-text');
 const startIconEl = document.getElementById('start-icon');
-const resetBtnEl = document.getElementById('reset-btn');
+const stopBtnEl = document.getElementById('stop-btn');
 const tabButtons = document.querySelectorAll('.tab-btn');
-const progressCircle = document.querySelector('.progress-ring-circle');
+const catStageEl = document.getElementById('cat-stage');
 const navTimerLabelEl = document.getElementById('nav-timer-label');
 
-// Progress ring setup
-const radius = progressCircle.r.baseVal.value;
-const circumference = 2 * Math.PI * radius;
-progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
-progressCircle.style.strokeDashoffset = '0';
+const ACTIVE_TASK_KEY = 'pomodoro-active-task';
+const PLAY_ICON = '<path d="M8 5v14l11-7z"/>';
+const COFFEE_ICON = '<path d="M4 8h12v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M16 10h2a2.5 2.5 0 0 1 0 5h-2" fill="none" stroke="currentColor" stroke-width="2"/>';
+const MODE_STATUS = { idle: 'Ready when you are', work: 'Working…', break: 'Break time ☕' };
 
-function setProgress(percent) {
-  const offset = circumference - (percent / 100) * circumference;
-  progressCircle.style.strokeDashoffset = offset;
+/**
+ * The clock: Work counts up today's total work time, Break counts up today's break time. Both keep running
+ * on the wall clock (store.js), so a reload or a throttled background tab loses nothing.
+ */
+function updateClock() {
+  const t = store.todayTotals();
+  if (t.mode !== workMode) { // first run after a reload, or changed in another tab
+    workMode = t.mode;
+    applyWorkUi();
+  }
+  todayWorkMs = t.work_ms;
+  const onBreak = t.mode === 'break';
+  const shown = formatElapsed(onBreak ? t.break_ms : t.work_ms);
+
+  timeDisplayEl.textContent = shown;
+  document.title = t.mode === 'idle' ? 'Focus Dashboard - Pomodoro' : `${shown} · ${onBreak ? 'Break' : 'Work'}`;
+  modeStatusEl.textContent = MODE_STATUS[t.mode];
+  stretchLineEl.hidden = t.mode === 'idle';
+  stretchLineEl.textContent = `${onBreak ? 'This break' : 'This stretch'} ${formatElapsed(t.stretch_ms)}`;
+  navTimerLabelEl.textContent = t.mode === 'idle' ? 'Overview' : formatElapsed(t.stretch_ms);
+
+  todayFocusMinsEl.textContent = Math.floor(t.work_ms / 60000);
+  todayBreakMinsEl.textContent = Math.floor(t.break_ms / 60000);
+  renderGoal();
+  checkGoalReached(t.work_ms);
+  updateTaskClocks();
 }
 
-function modeTitle(mode) {
-  return mode === 'focus' ? 'Focus' : mode === 'shortBreak' ? 'Short Break' : 'Long Break';
+function checkGoalReached(workMs) {
+  if (workMs < config.daily_goal * 3600000) return;
+  const day = window.PomodoroStore.localDayKey(new Date());
+  if (goalReachedDay === day) return;
+  goalReachedDay = day;
+  if (!goalPrimed) return;
+  celebrate('big');
+  buzz([30, 60, 30]);
+  showToast(`🎉 Daily work goal reached — ${hoursText(workMs / 60000)} today!`);
 }
 
-function updateDisplay() {
-  const formatted = formatTime(timeLeft);
-  timeDisplayEl.textContent = formatted;
-  document.title = `${formatted} - ${modeTitle(currentMode)}`;
-
-  const percent = ((totalDuration - timeLeft) / totalDuration) * 100;
-  setProgress(percent);
-  updateNavTimer();
-}
-
-/** On phones the Timer tab shows the countdown while it runs, so it stays visible from other tabs. */
-function updateNavTimer() {
-  navTimerLabelEl.textContent = isRunning ? formatTime(timeLeft) : 'Timer';
-}
-
-function setButtonState(running) {
-  updateNavTimer();
-  if (running) {
-    startTextEl.textContent = 'Pause';
-    startIconEl.innerHTML = '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>';
-    startBtnEl.classList.remove('paused');
+/** Cat, tabs, button and theme follow the mode. */
+function applyWorkUi() {
+  bodyEl.setAttribute('data-mode', workMode);
+  catStageEl.setAttribute('data-mode', workMode);
+  tabButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.mode === (workMode === 'break' ? 'break' : 'work')));
+  stopBtnEl.hidden = workMode === 'idle';
+  startBtnEl.classList.toggle('on-break', workMode === 'work');
+  if (workMode === 'work') {
+    startTextEl.textContent = 'Take a break';
+    startIconEl.innerHTML = COFFEE_ICON;
   } else {
-    startTextEl.textContent = 'Start';
-    startIconEl.innerHTML = '<path d="M8 5v14l11-7z"/>';
-    if (timeLeft < totalDuration && timeLeft > 0) {
-      startBtnEl.classList.add('paused');
-    } else {
-      startBtnEl.classList.remove('paused');
-    }
+    startTextEl.textContent = workMode === 'break' ? 'Back to work' : 'Start work';
+    startIconEl.innerHTML = PLAY_ICON;
   }
 }
 
-// ---- Persistence: survive page refresh ----
-function saveTimerState() {
+function saveActiveTask() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot({
-      mode: currentMode, running: isRunning, timeLeft, completedCycles: completedFocusCycles, activeTaskId
-    }, Date.now())));
+    if (activeTaskId) localStorage.setItem(ACTIVE_TASK_KEY, activeTaskId);
+    else localStorage.removeItem(ACTIVE_TASK_KEY);
   } catch (e) { /* storage unavailable */ }
 }
 
-function tick() {
-  timeLeft = remainingSeconds(endsAt, Date.now());
-  updateDisplay();
-  if (timeLeft <= 0) {
-    handleSessionComplete();
-  }
+/** Refresh everything that depends on the mode or on a stretch having just been logged. */
+function afterModeChange() {
+  const before = workMode;
+  workMode = store.getWorkState().mode;
+  // The cat announces a switch to work or to a break (not a stop, and not a task change within work)
+  if (workMode !== before && workMode !== 'idle' && config.cat_sound) window.catSound.meow(workMode);
+  applyWorkUi();
+  saveActiveTask();
+  fetchTasks();
+  loadStats();
+  updateClock();
 }
 
-function startTimer() {
-  if (isRunning) return;
-  window.ambientSound.init(); // unlock audio on a user gesture so the end chime can play
-  requestNotificationPermission();
-  isRunning = true;
+function startWork() {
+  if (workMode === 'work') return;
   buzz(10);
-  endsAt = Date.now() + timeLeft * 1000;
-  setButtonState(true);
-  // Wall-clock based: ticking faster than 1s keeps the display accurate when throttled.
-  timerId = setInterval(tick, 250);
-  saveTimerState();
+  store.setWorkMode('work', activeTaskId);
+  if (activeTaskId) store.startTaskClock(activeTaskId);
+  afterModeChange();
 }
 
-function pauseTimer(silent = false) {
-  if (!isRunning) return;
-  if (!silent) buzz(10);
-  clearInterval(timerId);
-  timerId = null;
-  timeLeft = remainingSeconds(endsAt, Date.now());
-  endsAt = null;
-  isRunning = false;
-  setButtonState(false);
-  saveTimerState();
+/** Work is logged and the break clock starts; the focused task's own timer pauses until you are back. */
+function takeBreak() {
+  if (workMode === 'break') return;
+  buzz(10);
+  store.pauseTaskClock();
+  store.setWorkMode('break');
+  afterModeChange();
 }
 
-function resetTimer() {
-  pauseTimer();
-  timeLeft = totalDuration;
-  modeStatusEl.textContent = currentMode === 'focus' ? 'Stay Focused' : 'Rest & Recharge';
-  updateDisplay();
-  setButtonState(false);
-  saveTimerState();
+function stopClock() {
+  if (workMode === 'idle') return;
+  store.pauseTaskClock();
+  store.setWorkMode('idle');
+  afterModeChange();
 }
 
-// ---- End-of-session alerts ----
-function requestNotificationPermission() {
-  if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission().catch(() => {});
-  }
+const toggleClock = () => (workMode === 'work' ? takeBreak() : startWork());
+
+/** While working, a stretch belongs to one task, so it is split whenever the task being worked on changes. */
+function retargetWork(taskId) {
+  if (store.getWorkState().mode === 'work') store.setWorkMode('work', taskId);
 }
 
-function notifySessionEnd(finishedMode, upcomingMode) {
-  window.ambientSound.chime();
-  if (!('Notification' in window) || Notification.permission !== 'granted') return;
-  const title = `${modeTitle(finishedMode)} complete`;
-  const options = {
-    body: `Up next: ${modeTitle(upcomingMode)}`,
-    tag: 'pomodoro-session-end',
-    renotify: true,
-    icon: 'icons/icon-192.png',
-    vibrate: [200, 100, 200]
-  };
-  const viaPage = () => {
-    try { new Notification(title, options); } catch (e) { /* page notifications unsupported */ }
-  };
-  // Android Chrome only allows notifications from a service worker, so prefer it when present.
-  if (!('serviceWorker' in navigator)) return viaPage();
-  navigator.serviceWorker.getRegistration()
-    .then((reg) => (reg ? reg.showNotification(title, options) : viaPage()))
-    .catch(viaPage);
-}
-
-function handleSessionComplete() {
-  pauseTimer(true);
-  const finishedMode = currentMode;
-  const finishedDuration = totalDuration;
-  const finishedTaskId = activeTaskId;
-
-  if (finishedMode === 'focus') completedFocusCycles++;
-  const upcoming = nextMode(finishedMode, completedFocusCycles, config.long_break_interval);
-
-  notifySessionEnd(finishedMode, upcoming);
-  switchMode(upcoming);
-  modeStatusEl.textContent = 'Session Complete!';
-  if (config.auto_start) startTimer();
-  saveTimerState();
-
-  let message = `${modeTitle(finishedMode)} complete`;
-  if (finishedMode === 'focus') {
-    const sessionsBefore = todaySessions;
-    store.logSession({ mode: 'focus', duration_seconds: finishedDuration, task_id: finishedTaskId });
-    loadStats();
-    fetchTasks();
-    const goalJustReached = sessionsBefore < config.daily_goal && todaySessions >= config.daily_goal;
-    if (goalJustReached) message = `🎉 Daily goal reached — ${todaySessions} sessions today!`;
-    else message = `🍅 ${Math.round(finishedDuration / 60)} min of focus logged`;
-    celebrate(goalJustReached ? 'big' : 'small');
-  }
-  buzz([200, 100, 200]);
-  showToast(message, config.auto_start ? null : {
-    label: upcoming === 'focus' ? 'Start focus' : 'Start break',
-    onClick: startTimer,
-  });
-}
-
-function switchMode(newMode) {
-  pauseTimer();
-  currentMode = newMode;
-  totalDuration = modeDuration(newMode, config);
-  modeStatusEl.textContent = newMode === 'focus' ? 'Stay Focused'
-    : newMode === 'shortBreak' ? 'Rest & Recharge' : 'Long Refresh';
-
-  timeLeft = totalDuration;
-  bodyEl.setAttribute('data-mode', newMode);
-
-  tabButtons.forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.mode === newMode);
-  });
-
-  updateDisplay();
-  setButtonState(false);
-  saveTimerState();
-}
-
-function toggleTimer() {
-  if (isRunning) {
-    pauseTimer();
-  } else {
-    startTimer();
-  }
-}
-
-// Timer Controls Listeners
-startBtnEl.addEventListener('click', toggleTimer);
-resetBtnEl.addEventListener('click', resetTimer);
+startBtnEl.addEventListener('click', toggleClock);
+stopBtnEl.addEventListener('click', stopClock);
 
 tabButtons.forEach(btn => {
-  btn.addEventListener('click', () => {
-    const selectedMode = btn.dataset.mode;
-    if (selectedMode !== currentMode) {
-      switchMode(selectedMode);
-    }
-  });
+  btn.addEventListener('click', () => (btn.dataset.mode === 'break' ? takeBreak() : startWork()));
 });
 
-// Keyboard shortcuts: Space start/pause, R reset, 1/2/3 switch mode
+// Keyboard shortcuts: Space switches work/break, 1 work, 2 break
 document.addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (settingsModal.classList.contains('open')) return;
   const action = shortcutAction(e.key, e.target);
   if (!action) return;
   e.preventDefault();
-  if (action === 'toggle') toggleTimer();
-  else if (action === 'reset') resetTimer();
-  else if (action !== currentMode) switchMode(action);
+  if (action === 'toggle') toggleClock();
+  else if (action === 'work') startWork();
+  else takeBreak();
 });
 
 // Recompute immediately when the tab becomes visible again
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && isRunning) tick();
+  if (!document.hidden) updateClock();
 });
 
-/** Restore a persisted timer after settings are loaded (durations depend on config). */
-function restoreTimerState() {
-  let raw = null;
-  try { raw = localStorage.getItem(STORAGE_KEY); } catch (e) { /* ignore */ }
-  const saved = restore(raw, Date.now(), config);
-  if (!saved) {
-    switchMode(currentMode); // apply configured durations
-    return;
-  }
-
-  completedFocusCycles = saved.completedCycles;
-  activeTaskId = saved.activeTaskId;
-  switchMode(saved.mode);
-  if (saved.expired) {
-    timeLeft = 0;
-    handleSessionComplete();
-    return;
-  }
-  timeLeft = saved.timeLeft;
-  updateDisplay();
-  if (saved.running) startTimer(); else setButtonState(false);
-}
-
-/** After a reload, the task whose timer kept running is the focused task. */
-function resumeRunningTask() {
-  const id = store.runningTaskId();
-  if (!id) return;
-  activeTaskId = id;
-  syncActiveTaskPill();
-  renderTasks();
-}
+setInterval(updateClock, 1000);
 
 // ====================================================
 // Task Tracker (localStorage)
@@ -358,17 +240,77 @@ function updateTaskCounter() {
   const open = total - completed;
   navTasksBadgeEl.hidden = open === 0;
   navTasksBadgeEl.textContent = open;
-  if (total === 0) {
-    taskEmptyStateEl.classList.add('visible');
-  } else {
-    taskEmptyStateEl.classList.remove('visible');
-  }
+  taskEmptyStateEl.classList.toggle('visible', open === 0);
+  taskEmptyStateEl.textContent = total === 0
+    ? 'No tasks yet. Add one to set your intention.'
+    : 'Everything is done 🎉 Add another task, or restore one from Done.';
+}
+
+// ---- Done bucket: finished tasks move here, and Restore puts one back on the board ----
+const doneListEl = document.getElementById('done-list');
+const doneCounterEl = document.getElementById('done-counter');
+const doneEmptyEl = document.getElementById('done-empty');
+
+function renderDone() {
+  const done = tasks
+    .filter(t => t.completed)
+    .sort((a, b) => (b.completed_at ? Date.parse(b.completed_at) : 0) - (a.completed_at ? Date.parse(a.completed_at) : 0));
+  doneListEl.innerHTML = '';
+  done.forEach((task) => {
+    const li = document.createElement('li');
+    li.className = 'done-item';
+    li.dataset.id = task.id;
+
+    const main = document.createElement('div');
+    main.className = 'done-main';
+    const text = document.createElement('span');
+    text.className = 'done-text';
+    renderTaskText(text, task.text);
+    main.appendChild(text);
+
+    const meta = document.createElement('div');
+    meta.className = 'task-meta';
+    if (task.elapsed_ms) {
+      const time = document.createElement('span');
+      time.className = 'task-time-badge';
+      time.textContent = `⏱ ${formatElapsed(task.elapsed_ms)}`;
+      time.title = 'Total time spent';
+      meta.appendChild(time);
+    }
+    if (task.points) {
+      const sp = document.createElement('span');
+      sp.className = 'task-points-badge';
+      sp.textContent = pointsLabel(task.points);
+      meta.appendChild(sp);
+    }
+    if (meta.children.length) main.appendChild(meta);
+
+    const shown = taskDisplayText(task.text);
+    const restore = document.createElement('button');
+    restore.type = 'button';
+    restore.className = 'task-restore-btn';
+    restore.textContent = '↩ Restore';
+    restore.setAttribute('aria-label', `Restore "${shown}" to your tasks`);
+    restore.addEventListener('click', () => toggleTask(task.id, false));
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'task-delete-btn done-delete-btn';
+    remove.setAttribute('aria-label', `Delete "${shown}"`);
+    remove.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+    remove.addEventListener('click', () => deleteTask(task.id));
+
+    li.append(main, restore, remove);
+    doneListEl.appendChild(li);
+  });
+  doneCounterEl.textContent = done.length;
+  doneEmptyEl.classList.toggle('visible', done.length === 0);
 }
 
 function renderTasks() {
   taskListEl.innerHTML = '';
 
-  tasks.forEach((task) => {
+  tasks.filter(t => !t.completed).forEach((task) => {
     const li = document.createElement('li');
     li.className = `task-item ${task.completed ? 'completed' : ''} ${task.id === activeTaskId ? 'selected-task' : ''}`;
     li.dataset.id = task.id;
@@ -513,6 +455,7 @@ function renderTasks() {
   });
 
   renderMatrix();
+  renderDone();
   updateTaskCounter();
 }
 
@@ -524,9 +467,9 @@ function renderMatrix() {
     lists[ul.dataset.list] = ul;
   });
   const counts = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 };
-  tasks.forEach((task) => {
+  tasks.filter(t => !t.completed).forEach((task) => {
     const q = task.quadrant || 0;
-    if (!task.completed) counts[q]++;
+    counts[q]++;
     lists[q].appendChild(buildMatrixChip(task));
   });
   taskMatrixEl.querySelectorAll('.quadrant-count').forEach((el) => {
@@ -732,22 +675,26 @@ function syncActiveTaskPill() {
 function selectActiveTask(task) {
   if (task.completed) return;
   if (store.runningTaskId() === task.id) {
-    store.pauseTaskClock();
+    store.pauseTaskClock(); // the work clock keeps going, just not on a task
+    retargetWork(null);
   } else {
     activeTaskId = task.id;
-    store.startTaskClock(task.id);
+    // On a break the task is only lined up; otherwise this starts work (from idle) or splits the stretch
+    if (store.getWorkState().mode !== 'break') {
+      store.setWorkMode('work', task.id);
+      store.startTaskClock(task.id);
+    }
   }
-  fetchTasks();
-  saveTimerState();
+  afterModeChange();
 }
 
 /** Stop focusing on any task: its timer pauses and keeps the time. */
 function clearActiveTask() {
   if (!activeTaskId) return;
   store.pauseTaskClock();
+  retargetWork(null);
   activeTaskId = null;
-  fetchTasks();
-  saveTimerState();
+  afterModeChange();
 }
 
 activeTaskPillEl.setAttribute('role', 'button');
@@ -768,7 +715,6 @@ function updateTaskClocks() {
   }
   if (activeTaskId) syncActiveTaskPill();
 }
-setInterval(updateTaskClocks, 1000);
 
 function addTask(text, estimate = 0, points = 0) {
   if (store.addTask(text, estimate, null, points)) fetchTasks();
@@ -778,11 +724,17 @@ function toggleTask(id, completed) {
   const task = tasks.find(t => t.id === id);
   const before = store.pointsSummary().today;
   store.updateTask(id, { completed });
-  if (completed && activeTaskId === id) {
-    activeTaskId = null; // finished: stop focusing on it (its timer already stopped)
-    saveTimerState();
+  if (completed) {
+    // finished: the work stretch moves on from this task (its own timer already stopped)
+    if (store.getWorkState().task_id === id) retargetWork(null);
+    if (activeTaskId === id) {
+      activeTaskId = null;
+      saveActiveTask();
+    }
   }
   fetchTasks();
+  loadStats();
+  updateClock();
   if (!completed) return;
   document.querySelectorAll(`#task-list [data-id="${CSS.escape(id)}"], #task-matrix [data-id="${CSS.escape(id)}"]`)
     .forEach(el => el.classList.add('just-completed'));
@@ -816,17 +768,19 @@ function deleteTask(id) {
   if (wasActive) {
     activeTaskId = null;
     activeTaskPillEl.style.display = 'none';
-    saveTimerState();
+    saveActiveTask();
   }
+  if (store.getWorkState().task_id === id) retargetWork(null);
   store.deleteTask(id);
   fetchTasks();
+  loadStats();
   showToast(`Deleted “${taskDisplayText(removed.text)}”`, {
     label: 'Undo',
     onClick: () => {
       if (!store.restoreTask(removed, index)) return;
       if (wasActive) activeTaskId = id;
       fetchTasks();
-      saveTimerState();
+      saveActiveTask();
     },
   });
 }
@@ -942,38 +896,10 @@ taskFormEl.addEventListener('submit', (e) => {
 });
 
 // ====================================================
-// Ambient Sound Controls
-// ====================================================
-const soundChips = document.querySelectorAll('.sound-chip');
-const soundStatusPill = document.getElementById('sound-status-pill');
-const ambientVolumeSlider = document.getElementById('ambient-volume');
-
-soundChips.forEach(chip => {
-  chip.addEventListener('click', () => {
-    const soundType = chip.dataset.sound;
-    const isNowPlaying = window.ambientSound.play(soundType);
-
-    soundChips.forEach(c => c.classList.remove('active'));
-    if (isNowPlaying) {
-      chip.classList.add('active');
-      soundStatusPill.textContent = 'Playing';
-      soundStatusPill.classList.remove('muted');
-    } else {
-      soundStatusPill.textContent = 'Muted';
-      soundStatusPill.classList.add('muted');
-    }
-  });
-});
-
-ambientVolumeSlider.addEventListener('input', (e) => {
-  window.ambientSound.setVolume(parseFloat(e.target.value));
-});
-
-// ====================================================
 // Focus Analytics
 // ====================================================
 const todayFocusMinsEl = document.getElementById('today-focus-mins');
-const todaySessionsCountEl = document.getElementById('today-sessions-count');
+const todayBreakMinsEl = document.getElementById('today-break-mins');
 const streakCountEl = document.getElementById('streak-count');
 const weeklyTotalEl = document.getElementById('weekly-total');
 const weeklyChartEl = document.getElementById('weekly-chart');
@@ -983,8 +909,9 @@ const goalBarEl = document.getElementById('goal-bar-fill');
 const goalTrackEl = document.getElementById('goal-bar');
 
 function renderGoal() {
-  const g = goalProgress(todaySessions, config.daily_goal);
-  goalTextEl.textContent = g.reached ? `🎉 Goal reached! ${g.done}/${g.goal}` : `${g.done}/${g.goal} sessions`;
+  const g = goalProgress(todayWorkMs / 60000, config.daily_goal * 60);
+  const progress = `${hoursText(todayWorkMs / 60000)} / ${config.daily_goal}h`;
+  goalTextEl.textContent = g.reached ? `🎉 Goal reached! ${progress}` : progress;
   goalBarEl.style.width = `${g.percent}%`;
   goalTrackEl.setAttribute('aria-valuenow', String(g.percent));
 }
@@ -992,11 +919,7 @@ function renderGoal() {
 function loadStats() {
   const stats = store.summary();
 
-  todayFocusMinsEl.textContent = Math.round(stats.today_minutes);
-  todaySessionsCountEl.textContent = stats.today_sessions;
   streakCountEl.textContent = stats.streak;
-  todaySessions = stats.today_sessions;
-  renderGoal();
 
   const weeklyMins = stats.daily_breakdown.reduce((acc, d) => acc + d.minutes, 0);
   const weeklyHours = (weeklyMins / 60).toFixed(1);
@@ -1384,13 +1307,9 @@ const openSettingsBtn = document.getElementById('open-settings-btn');
 const closeSettingsBtn = document.getElementById('close-settings-btn');
 const settingsForm = document.getElementById('settings-form');
 
-const settingFocusInput = document.getElementById('setting-focus');
-const settingShortInput = document.getElementById('setting-short');
-const settingLongInput = document.getElementById('setting-long');
-const settingIntervalInput = document.getElementById('setting-interval');
 const settingGoalInput = document.getElementById('setting-goal');
 const settingPointsGoalInput = document.getElementById('setting-points-goal');
-const settingAutoStartInput = document.getElementById('setting-autostart');
+const settingSoundInput = document.getElementById('setting-sound');
 
 let lastFocusedBeforeModal = null;
 
@@ -1398,7 +1317,7 @@ function openSettings() {
   lastFocusedBeforeModal = document.activeElement;
   settingsModal.classList.add('open');
   settingsModal.setAttribute('aria-hidden', 'false');
-  settingFocusInput.focus();
+  settingGoalInput.focus();
 }
 
 function closeSettings() {
@@ -1433,13 +1352,9 @@ settingsModal.addEventListener('keydown', (e) => {
 });
 
 function fillSettingsForm() {
-  settingFocusInput.value = config.focus_duration;
-  settingShortInput.value = config.short_break;
-  settingLongInput.value = config.long_break;
-  settingIntervalInput.value = config.long_break_interval;
   settingGoalInput.value = config.daily_goal;
   settingPointsGoalInput.value = config.daily_points_goal;
-  settingAutoStartInput.checked = Boolean(config.auto_start);
+  settingSoundInput.checked = Boolean(config.cat_sound);
 }
 
 function loadSettings() {
@@ -1452,22 +1367,16 @@ function loadSettings() {
 settingsForm.addEventListener('submit', (e) => {
   e.preventDefault();
   const updated = {
-    focus_duration: parseInt(settingFocusInput.value, 10),
-    short_break: parseInt(settingShortInput.value, 10),
-    long_break: parseInt(settingLongInput.value, 10),
-    long_break_interval: parseInt(settingIntervalInput.value, 10),
     daily_goal: parseInt(settingGoalInput.value, 10),
     daily_points_goal: parseInt(settingPointsGoalInput.value, 10),
-    auto_start: settingAutoStartInput.checked ? 1 : 0
+    cat_sound: settingSoundInput.checked ? 1 : 0
   };
 
   config = { ...config, ...store.saveSettings(updated) };
   closeSettings();
   renderGoal();
   loadScore();
-  if (!isRunning) {
-    switchMode(currentMode);
-  }
+  updateClock();
 });
 
 // ====================================================
@@ -1538,7 +1447,7 @@ importBackupInputEl.addEventListener('change', async () => {
     loadSettings();
     fetchTasks();
     loadStats();
-    if (!isRunning) switchMode(currentMode);
+    updateClock();
     setDataStatus(`Imported ${added.tasks} new ${added.tasks === 1 ? 'task' : 'tasks'} and ${added.sessions} new ${added.sessions === 1 ? 'session' : 'sessions'}.`);
   } catch (err) {
     setDataStatus(err.message, true);
@@ -1687,13 +1596,18 @@ bottomNavBtns.forEach((btn) => btn.addEventListener('click', () => setView(btn.d
 
 // Initialization: settings first (durations depend on them), then restore the timer
 (function init() {
-  updateDisplay();
   try { setView(localStorage.getItem(VIEW_KEY)); } catch (e) { setView('timer'); }
   try { setTaskView(localStorage.getItem(TASK_VIEW_KEY)); } catch (e) { setTaskView('list'); }
+  try {
+    localStorage.removeItem('pomodoro-timer-state'); // the old countdown's saved state
+    activeTaskId = localStorage.getItem(ACTIVE_TASK_KEY);
+  } catch (e) { /* storage unavailable */ }
+  // The task whose timer kept running while the page was closed is the focused one
+  activeTaskId = store.runningTaskId() || activeTaskId;
   loadSettings();
   fetchTasks();
   loadStats();
-  restoreTimerState();
-  resumeRunningTask();
+  updateClock();
+  goalPrimed = true;
   registerServiceWorker();
 })();

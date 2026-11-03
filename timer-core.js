@@ -1,4 +1,4 @@
-// Pure timer logic (no DOM) so it can be unit-tested with `node --test`.
+// Pure helpers for the work/break clock and task text (no DOM) so it can be unit-tested with `node --test`.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) {
     module.exports = factory();
@@ -6,71 +6,6 @@
     root.TimerCore = factory();
   }
 })(typeof self !== 'undefined' ? self : this, function () {
-  const MODES = ['focus', 'shortBreak', 'longBreak'];
-  const STORAGE_KEY = 'pomodoro-timer-state';
-
-  /** Duration in seconds for a mode, given config in minutes. */
-  function modeDuration(mode, config) {
-    if (mode === 'shortBreak') return config.short_break * 60;
-    if (mode === 'longBreak') return config.long_break * 60;
-    return config.focus_duration * 60;
-  }
-
-  /** Whole seconds left until endsAt (never negative). Wall-clock based, so it cannot drift. */
-  function remainingSeconds(endsAt, now) {
-    return Math.max(0, Math.ceil((endsAt - now) / 1000));
-  }
-
-  /** Mode that follows `mode`, where completedCycles already includes a just-finished focus. */
-  function nextMode(mode, completedCycles, longBreakInterval) {
-    if (mode !== 'focus') return 'focus';
-    return completedCycles % longBreakInterval === 0 ? 'longBreak' : 'shortBreak';
-  }
-
-  /** Snapshot of the timer to persist across reloads. */
-  function snapshot(state, now) {
-    return {
-      mode: state.mode,
-      running: state.running,
-      endsAt: state.running ? now + state.timeLeft * 1000 : null,
-      timeLeft: state.timeLeft,
-      completedCycles: state.completedCycles,
-      activeTaskId: state.activeTaskId || null,
-    };
-  }
-
-  /**
-   * Rebuild timer state from a stored snapshot.
-   * Returns null if the snapshot is missing/invalid; `expired: true` if a running
-   * timer finished while the page was closed.
-   */
-  function restore(raw, now, config) {
-    let s = raw;
-    if (typeof raw === 'string') {
-      try { s = JSON.parse(raw); } catch (e) { return null; }
-    }
-    if (!s || typeof s !== 'object' || !MODES.includes(s.mode)) return null;
-
-    const total = modeDuration(s.mode, config);
-    const cycles = Number.isInteger(s.completedCycles) && s.completedCycles >= 0 ? s.completedCycles : 0;
-    const base = { mode: s.mode, completedCycles: cycles, activeTaskId: s.activeTaskId || null };
-
-    if (s.running && Number.isFinite(s.endsAt)) {
-      const left = remainingSeconds(s.endsAt, now);
-      if (left === 0) return { ...base, running: false, timeLeft: 0, expired: true };
-      return { ...base, running: true, timeLeft: Math.min(left, total), expired: false };
-    }
-    const left = Number.isFinite(s.timeLeft) ? Math.min(Math.max(0, Math.floor(s.timeLeft)), total) : total;
-    return { ...base, running: false, timeLeft: left > 0 ? left : total, expired: false };
-  }
-
-  /** mm:ss */
-  function formatTime(seconds) {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-  }
-
   /** Time spent as "m:ss" (or "h:mm:ss" from one hour), from milliseconds. */
   function formatElapsed(ms) {
     const total = Math.max(0, Math.floor(ms / 1000));
@@ -86,17 +21,15 @@
     return { done, goal: g, percent: Math.min(100, Math.round((done / g) * 100)), reached: done >= g };
   }
 
-  /** Map a keyboard event key to a timer action, or null. Ignores typing in form fields. */
+  /** Map a keyboard event key to a clock action ('toggle', 'work', 'break'), or null. Ignores typing in form fields. */
   function shortcutAction(key, target) {
     const tag = target && target.tagName;
     if (key === ' ' && (tag === 'BUTTON' || tag === 'A')) return null; // native click handles it
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (target && target.isContentEditable)) return null;
     switch (key) {
       case ' ': return 'toggle';
-      case 'r': case 'R': return 'reset';
-      case '1': return 'focus';
-      case '2': return 'shortBreak';
-      case '3': return 'longBreak';
+      case '1': return 'work';
+      case '2': return 'break';
       default: return null;
     }
   }
@@ -171,7 +104,6 @@
 
   return {
     heatLevel, heatmapCells, estimateLabel, formatElapsed, shortUrl, taskTextParts, taskDisplayText, firstTaskLink,
-    MODES, STORAGE_KEY, modeDuration, remainingSeconds, nextMode,
-    snapshot, restore, formatTime, goalProgress, shortcutAction,
+    goalProgress, shortcutAction,
   };
 });

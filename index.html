@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="description" content="Focus timer, tasks, ambient sound and focus analytics.">
+  <meta name="description" content="Work and break clock with a cat, tasks and focus analytics.">
   <meta name="theme-color" content="#f38ba0" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#2a2024" media="(prefers-color-scheme: dark)">
   <meta name="mobile-web-app-capable" content="yes">
@@ -23,7 +23,7 @@
     try { document.documentElement.setAttribute('data-theme', localStorage.getItem('pomodoro-theme') || 'light'); } catch (e) {}
   </script>
 </head>
-<body data-mode="focus" data-view="timer">
+<body data-mode="idle" data-view="timer">
   <div class="dashboard-wrapper">
     <!-- Top Bar -->
     <header class="dashboard-topbar">
@@ -37,7 +37,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2.5 2.5"></path><path d="M9 2h6"></path>
           </svg>
-          <span id="nav-timer-label">Timer</span>
+          <span id="nav-timer-label">Overview</span>
         </button>
         <button class="bottom-nav-btn" data-view="tasks" type="button">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -164,77 +164,107 @@
           </div>
           <div id="task-empty-state" class="task-empty-state">No tasks yet. Add one to set your intention.</div>
         </section>
+
+        <!-- Finished tasks wait here; Restore puts one back on the board -->
+        <section class="panel-card done-card" aria-label="Done tasks">
+          <div class="card-header">
+            <h2 class="card-title">Done</h2>
+            <span id="done-counter" class="pill-badge muted">0</span>
+          </div>
+          <ul id="done-list" class="done-list"></ul>
+          <div id="done-empty" class="task-empty-state visible">Finished tasks land here. Restore one if you need it back.</div>
+        </section>
       </aside>
 
       <!-- Center Stage: Timer and Ambient Sound -->
       <section class="panel center-stage">
         <div class="timer-card">
-          <nav class="mode-tabs" aria-label="Timer Modes">
-            <button class="tab-btn active" data-mode="focus" type="button">Focus</button>
-            <button class="tab-btn" data-mode="shortBreak" type="button">Short Break</button>
-            <button class="tab-btn" data-mode="longBreak" type="button">Long Break</button>
+          <nav class="mode-tabs" aria-label="Work or break">
+            <button class="tab-btn active" data-mode="work" type="button">Work</button>
+            <button class="tab-btn" data-mode="break" type="button">Break</button>
           </nav>
 
-          <div class="timer-display-container">
-            <div class="timer-circle">
-              <svg class="progress-ring" viewBox="0 0 290 290" aria-hidden="true">
-                <circle class="progress-ring-bg" cx="145" cy="145" r="130" />
-                <circle class="progress-ring-circle" cx="145" cy="145" r="130" />
-              </svg>
-              <div class="timer-text-wrap">
-                <div id="time-display" class="time-display" aria-live="polite">25:00</div>
-                <span id="mode-status" class="mode-status">Stay Focused</span>
-                <div id="active-task-pill" class="active-task-pill" style="display: none;"></div>
-              </div>
-            </div>
+          <!-- The cat follows the clock: typing at the desk while you work, sipping coffee on a break, napping when idle -->
+          <div id="cat-stage" class="cat-stage" data-mode="idle">
+            <svg viewBox="0 0 260 210" role="img" aria-label="A cat at a desk: working at a laptop, having a coffee break, or napping">
+              <path class="cat-tail" d="M170 150 C 208 150 216 112 192 98" />
+              <ellipse class="cat-fur" cx="120" cy="150" rx="56" ry="46" />
+              <ellipse class="cat-belly" cx="120" cy="160" rx="32" ry="30" />
+              <g class="cat-head">
+                <path class="cat-fur" d="M88 66 L83 32 L112 54 Z" />
+                <path class="cat-fur" d="M152 66 L157 32 L128 54 Z" />
+                <path class="cat-ear-in" d="M91 60 L89 43 L104 54 Z" />
+                <path class="cat-ear-in" d="M149 60 L151 43 L136 54 Z" />
+                <circle class="cat-fur" cx="120" cy="88" r="38" />
+                <path class="cat-stripe" d="M120 52 v10 M110 54 l2 8 M130 54 l-2 8" />
+                <g class="eyes-open">
+                  <circle class="cat-ink" cx="105" cy="90" r="5" /><circle class="cat-ink" cx="135" cy="90" r="5" />
+                  <circle class="cat-shine" cx="107" cy="88" r="1.8" /><circle class="cat-shine" cx="137" cy="88" r="1.8" />
+                </g>
+                <path class="eyes-happy cat-line" d="M99 93 q6 -8 12 0 M129 93 q6 -8 12 0" />
+                <path class="eyes-sleep cat-line" d="M99 90 q6 6 12 0 M129 90 q6 6 12 0" />
+                <circle class="cat-blush" cx="94" cy="102" r="6" /><circle class="cat-blush" cx="146" cy="102" r="6" />
+                <path class="cat-nose" d="M116 99 h8 l-4 5 z" />
+                <path class="cat-line" d="M120 104 v3 M120 107 q-5 5 -10 1 M120 107 q5 5 10 1" />
+                <path class="cat-whisker" d="M92 100 l-24 -5 M92 105 l-24 5 M148 100 l24 -5 M148 105 l24 5" />
+              </g>
+
+              <g class="prop-work">
+                <rect class="laptop-lid" x="76" y="112" width="88" height="44" rx="7" />
+                <circle class="laptop-logo" cx="120" cy="134" r="5" />
+                <rect class="laptop-base" x="68" y="153" width="104" height="6" rx="3" />
+                <ellipse class="cat-fur paw paw-l" cx="66" cy="152" rx="12" ry="8" />
+                <ellipse class="cat-fur paw paw-r" cx="174" cy="152" rx="12" ry="8" />
+                <g class="code-dots"><circle cx="108" cy="30" r="3" /><circle cx="120" cy="30" r="3" /><circle cx="132" cy="30" r="3" /></g>
+              </g>
+
+              <g class="prop-break">
+                <path class="steam s1" d="M110 118 q-7 -10 0 -19 q7 -9 0 -18" />
+                <path class="steam s2" d="M121 116 q-7 -10 0 -19 q7 -9 0 -18" />
+                <path class="steam s3" d="M132 118 q-7 -10 0 -19 q7 -9 0 -18" />
+                <path class="mug-handle" d="M139 132 q17 0 17 12 q0 12 -17 12" />
+                <rect class="mug" x="102" y="124" width="38" height="32" rx="7" />
+                <rect class="mug-band" x="102" y="136" width="38" height="8" />
+                <ellipse class="coffee" cx="121" cy="125" rx="17" ry="4" />
+                <ellipse class="cat-fur paw" cx="101" cy="148" rx="10" ry="8" />
+                <ellipse class="cat-fur paw" cx="141" cy="148" rx="10" ry="8" />
+              </g>
+
+              <g class="prop-idle">
+                <text class="zzz z1" x="162" y="62">Z</text>
+                <text class="zzz z2" x="176" y="44">z</text>
+                <text class="zzz z3" x="188" y="30">z</text>
+              </g>
+
+              <rect class="cat-desk" x="18" y="158" width="224" height="14" rx="7" />
+              <rect class="cat-desk-leg" x="44" y="172" width="12" height="34" rx="4" />
+              <rect class="cat-desk-leg" x="204" y="172" width="12" height="34" rx="4" />
+            </svg>
+          </div>
+
+          <div class="clock-block">
+            <div id="time-display" class="time-display" aria-live="off">0:00</div>
+            <span id="mode-status" class="mode-status">Ready when you are</span>
+            <span id="stretch-line" class="stretch-line" hidden></span>
+            <div id="active-task-pill" class="active-task-pill" style="display: none;"></div>
           </div>
 
           <div class="controls-container">
-            <button id="start-btn" class="control-btn primary-btn" type="button" aria-label="Start Timer">
-              <svg class="btn-icon" id="start-icon" viewBox="0 0 24 24" fill="currentColor">
+            <button id="start-btn" class="control-btn primary-btn" type="button">
+              <svg class="btn-icon" id="start-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M8 5v14l11-7z"/>
               </svg>
-              <span id="start-text">Start</span>
+              <span id="start-text">Start work</span>
             </button>
 
-            <button id="reset-btn" class="control-btn secondary-btn" type="button" aria-label="Reset Timer">
-              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-                <path d="M3 3v5h5"/>
+            <button id="stop-btn" class="control-btn secondary-btn" type="button" aria-label="Stop the clock" hidden>
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <rect x="6" y="6" width="12" height="12" rx="2"/>
               </svg>
-              <span>Reset</span>
+              <span>Stop</span>
             </button>
           </div>
         </div>
-
-        <!-- Ambient Sound Generator -->
-        <section class="panel-card ambient-card" aria-label="Ambient Soundscape">
-          <div class="card-header">
-            <h2 class="card-title">Ambient Sound</h2>
-            <span id="sound-status-pill" class="pill-badge muted">Muted</span>
-          </div>
-
-          <div class="sound-presets">
-            <button class="sound-chip" data-sound="rain" type="button">
-              <span class="chip-icon">🌧️</span>
-              <span class="chip-label">Soft Rain</span>
-            </button>
-            <button class="sound-chip" data-sound="brown" type="button">
-              <span class="chip-icon">🌊</span>
-              <span class="chip-label">Deep Hum</span>
-            </button>
-            <button class="sound-chip" data-sound="forest" type="button">
-              <span class="chip-icon">🍃</span>
-              <span class="chip-label">Forest Breeze</span>
-            </button>
-          </div>
-
-          <div class="volume-slider-group">
-            <span class="volume-icon">🔈</span>
-            <input id="ambient-volume" type="range" min="0" max="1" step="0.05" value="0.5" aria-label="Ambient Volume">
-            <span class="volume-icon">🔊</span>
-          </div>
-        </section>
       </section>
 
       <!-- Right Panel: Analytics & Insights -->
@@ -304,20 +334,20 @@
             <div class="metric-box">
               <span class="metric-val" id="today-focus-mins">0</span>
               <span class="metric-unit">mins</span>
-              <span class="metric-label">Today's Focus</span>
+              <span class="metric-label">Today's Work</span>
             </div>
             <div class="metric-box">
-              <span class="metric-val" id="today-sessions-count">0</span>
-              <span class="metric-unit">done</span>
-              <span class="metric-label">Sessions</span>
+              <span class="metric-val" id="today-break-mins">0</span>
+              <span class="metric-unit">mins</span>
+              <span class="metric-label">Today's Break</span>
             </div>
           </div>
 
           <!-- Daily Goal -->
           <div class="goal-container">
             <div class="chart-header">
-              <span class="chart-title">Daily Goal</span>
-              <span id="goal-text" class="chart-subtitle">0/4 sessions</span>
+              <span class="chart-title">Daily Work Goal</span>
+              <span id="goal-text" class="chart-subtitle">0h / 4h</span>
             </div>
             <div id="goal-bar" class="goal-bar" role="progressbar" aria-label="Daily goal progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
               <div id="goal-bar-fill" class="goal-bar-fill"></div>
@@ -379,37 +409,21 @@
   <div id="settings-modal" class="modal-backdrop" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <div class="modal-header">
-        <h3 id="settings-title" class="modal-title">Timer Preferences</h3>
+        <h3 id="settings-title" class="modal-title">Preferences</h3>
         <button id="close-settings-btn" class="modal-close-btn" type="button" aria-label="Close settings">&times;</button>
       </div>
       <form id="settings-form" class="settings-form">
         <div class="setting-item">
-          <label for="setting-focus">Focus Duration (mins)</label>
-          <input id="setting-focus" type="number" min="1" max="90" value="25" required>
-        </div>
-        <div class="setting-item">
-          <label for="setting-short">Short Break (mins)</label>
-          <input id="setting-short" type="number" min="1" max="30" value="5" required>
-        </div>
-        <div class="setting-item">
-          <label for="setting-long">Long Break (mins)</label>
-          <input id="setting-long" type="number" min="1" max="60" value="15" required>
-        </div>
-        <div class="setting-item">
-          <label for="setting-interval">Long Break Interval (cycles)</label>
-          <input id="setting-interval" type="number" min="1" max="10" value="4" required>
-        </div>
-        <div class="setting-item">
-          <label for="setting-goal">Daily Goal (sessions)</label>
+          <label for="setting-goal">Daily Work Goal (hours)</label>
           <input id="setting-goal" type="number" min="1" max="24" value="4" required>
+        </div>
+        <div class="setting-item">
+          <label for="setting-sound">Cat sounds on work / break</label>
+          <input id="setting-sound" class="setting-toggle" type="checkbox">
         </div>
         <div class="setting-item">
           <label for="setting-points-goal">Daily Target (story points)</label>
           <input id="setting-points-goal" type="number" min="1" max="500" value="10" required>
-        </div>
-        <div class="setting-item">
-          <label for="setting-autostart">Auto-start next session</label>
-          <input id="setting-autostart" class="setting-toggle" type="checkbox">
         </div>
         <fieldset class="data-section">
           <legend>Your data</legend>
