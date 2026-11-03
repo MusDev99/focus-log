@@ -379,3 +379,68 @@ test('daily points target is a setting between 1 and 500', () => {
   assert.equal(store.saveSettings({ daily_points_goal: 0 }).daily_points_goal, 21);
   assert.equal(store.saveSettings({ daily_points_goal: 501 }).daily_points_goal, 21);
 });
+
+test('each task has its own clock: starting one pauses the other and each resumes where it stopped', () => {
+  const { store, clock } = makeStore();
+  const a = store.addTask('Task A');
+  const b = store.addTask('Task B');
+  const at = (s) => { clock.t = new Date(clock.t.getTime() + s * 1000); };
+
+  assert.equal(store.startTaskClock(a.id), true);
+  at(30);
+  assert.equal(store.taskElapsedMs(a.id), 30000);
+  assert.equal(store.runningTaskId(), a.id);
+
+  store.startTaskClock(b.id); // A pauses at 0:30
+  assert.equal(store.runningTaskId(), b.id);
+  at(30);
+  assert.equal(store.taskElapsedMs(a.id), 30000, 'A stays paused');
+  assert.equal(store.taskElapsedMs(b.id), 30000, 'B counted from zero');
+
+  store.startTaskClock(a.id); // resumes from 0:30
+  at(15);
+  assert.equal(store.taskElapsedMs(a.id), 45000);
+  assert.equal(store.taskElapsedMs(b.id), 30000);
+  assert.deepEqual(store.listTasks().map((t) => [t.running, t.elapsed_ms]), [[true, 45000], [false, 30000]]);
+
+  assert.equal(store.pauseTaskClock(), a.id);
+  at(60);
+  assert.equal(store.taskElapsedMs(a.id), 45000, 'paused clocks do not move');
+  assert.equal(store.runningTaskId(), null);
+  assert.equal(store.pauseTaskClock(), null);
+});
+
+test('completing a task stops its clock and keeps the total; completed tasks cannot restart', () => {
+  const { store, clock } = makeStore();
+  const a = store.addTask('Task A');
+  store.startTaskClock(a.id);
+  clock.t = new Date(clock.t.getTime() + 90 * 1000);
+  store.updateTask(a.id, { completed: true });
+  assert.equal(store.runningTaskId(), null);
+  clock.t = new Date(clock.t.getTime() + 600 * 1000);
+  assert.equal(store.listTasks()[0].elapsed_ms, 90000, 'total is final once completed');
+  assert.equal(store.startTaskClock(a.id), false);
+  store.updateTask(a.id, { completed: false });
+  assert.equal(store.listTasks()[0].elapsed_ms, 90000, 'reopening keeps the time');
+  assert.equal(store.startTaskClock(a.id), true);
+  assert.equal(store.startTaskClock('missing'), false);
+});
+
+test('deleting the running task stops the clock; time survives undo and backup, the running state does not', () => {
+  const { store, clock } = makeStore();
+  const a = store.addTask('Task A');
+  store.startTaskClock(a.id);
+  clock.t = new Date(clock.t.getTime() + 20 * 1000);
+  const removed = store.listTasks()[0];
+  assert.equal(removed.elapsed_ms, 20000);
+  store.deleteTask(a.id);
+  assert.equal(store.runningTaskId(), null);
+  store.restoreTask(removed, 0);
+  assert.equal(store.taskElapsedMs(a.id), 20000);
+  assert.equal(store.runningTaskId(), null);
+
+  const other = makeStore().store;
+  other.importBackup(store.exportBackup());
+  assert.equal(other.listTasks()[0].elapsed_ms, 20000);
+  assert.equal(other.runningTaskId(), null);
+});

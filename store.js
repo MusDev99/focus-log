@@ -7,10 +7,11 @@
     root.PomodoroStore = factory();
   }
 })(typeof self !== 'undefined' ? self : this, function () {
-  const KEYS = { tasks: 'pomodoro-tasks', sessions: 'pomodoro-sessions', settings: 'pomodoro-settings' };
+  const KEYS = { tasks: 'pomodoro-tasks', sessions: 'pomodoro-sessions', settings: 'pomodoro-settings', clock: 'pomodoro-task-clock' };
   const MAX_TASK_LENGTH = 200; // room for a link
   const MAX_ESTIMATE = 20;
   const MAX_POINTS = 100;
+  const MAX_ELAPSED_MS = 1000 * 24 * 60 * 60 * 1000;
   const MAX_SESSION_SECONDS = 24 * 60 * 60;
   const TOP_TASKS_LIMIT = 10;
   const VALID_MODES = ['focus', 'shortBreak', 'longBreak'];
@@ -101,6 +102,8 @@
   const cleanQuadrant = (q) => (Number.isInteger(q) && q >= 1 && q <= 4 ? q : null);
   const clampEstimate = (n) => (Number.isInteger(n) ? Math.min(MAX_ESTIMATE, Math.max(0, n)) : 0);
   /** Optional story points; 0 = not scored. */
+  /** Time spent on a task, in ms (banked while its clock is stopped). */
+  const cleanElapsed = (n) => (Number.isFinite(n) ? Math.min(MAX_ELAPSED_MS, Math.max(0, Math.round(n))) : 0);
   const cleanPoints = (n) => (Number.isInteger(n) ? Math.min(MAX_POINTS, Math.max(0, n)) : 0);
 
   /** A task from an imported backup, normalised, or null if unusable. */
@@ -117,6 +120,7 @@
       estimate: clampEstimate(t.estimate),
       quadrant: cleanQuadrant(t.quadrant),
       points: cleanPoints(t.points),
+      elapsed_ms: cleanElapsed(t.elapsed_ms),
       created_at: Number.isNaN(created) ? new Date(0).toISOString() : new Date(created).toISOString(),
       completed_at: completed && !Number.isNaN(done) ? new Date(done).toISOString() : null,
     };
@@ -193,16 +197,68 @@
       return next;
     }
 
+    // ---- Per-task stopwatch: one task's clock runs at a time; switching banks the time spent ----
+    function readClock() {
+      const c = read(KEYS.clock, null);
+      return c && typeof c.task_id === 'string' && Number.isFinite(c.since) ? c : null;
+    }
+
+    const liveMs = (clock) => (clock ? Math.max(0, now().getTime() - clock.since) : 0);
+
+    /** Stop the running clock and add its time to that task. Returns the task id, or null if none was running. */
+    function pauseTaskClock() {
+      const clock = readClock();
+      if (!clock) return null;
+      const spent = liveMs(clock);
+      write(KEYS.clock, null);
+      write(KEYS.tasks, rawTasks().map((t) => (
+        t.id === clock.task_id ? { ...t, elapsed_ms: cleanElapsed((t.elapsed_ms || 0) + spent) } : t
+      )));
+      return clock.task_id;
+    }
+
+    /** Run this task's clock from where it stopped, pausing any other. False for unknown or completed tasks. */
+    function startTaskClock(id) {
+      const task = rawTasks().find((t) => t.id === id);
+      if (!task || task.completed === true) return false;
+      const clock = readClock();
+      if (clock && clock.task_id === id) return true;
+      pauseTaskClock();
+      write(KEYS.clock, { task_id: id, since: now().getTime() });
+      return true;
+    }
+
+    /** Id of the task whose clock is running, or null. */
+    function runningTaskId() {
+      const clock = readClock();
+      if (!clock) return null;
+      const task = rawTasks().find((t) => t.id === clock.task_id);
+      return task && task.completed !== true ? clock.task_id : null;
+    }
+
+    /** Total ms spent on a task so far, including the running stretch. */
+    function taskElapsedMs(id) {
+      const task = rawTasks().find((t) => t.id === id);
+      if (!task) return 0;
+      const clock = readClock();
+      return cleanElapsed((task.elapsed_ms || 0) + (clock && clock.task_id === id ? liveMs(clock) : 0));
+    }
+
     /** Tasks in creation order, each with `actual` = focus sessions logged against it. */
     function listTasks() {
       const counts = {};
       focusSessions().forEach((s) => {
         if (s.task_id != null) counts[s.task_id] = (counts[s.task_id] || 0) + 1;
       });
-      return rawTasks().map((t) => ({
-        ...t, quadrant: cleanQuadrant(t.quadrant), points: cleanPoints(t.points),
-        completed_at: t.completed_at || null, actual: counts[t.id] || 0,
-      }));
+      const clock = readClock();
+      return rawTasks().map((t) => {
+        const running = !!clock && clock.task_id === t.id && t.completed !== true;
+        return {
+          ...t, quadrant: cleanQuadrant(t.quadrant), points: cleanPoints(t.points),
+          completed_at: t.completed_at || null, actual: counts[t.id] || 0,
+          running, elapsed_ms: cleanElapsed((t.elapsed_ms || 0) + (running ? liveMs(clock) : 0)),
+        };
+      });
     }
 
     function addTask(text, estimate = 0, quadrant = null, points = 0) {
@@ -217,6 +273,11 @@
     }
 
     function updateTask(id, fields) {
+      // finishing a task stops its clock, so the time spent is final
+      if (fields.completed === true) {
+        const clock = readClock();
+        if (clock && clock.task_id === id) pauseTaskClock();
+      }
       let found = false;
       const tasks = rawTasks().map((t) => {
         if (t.id !== id) return t;
@@ -238,6 +299,8 @@
     }
 
     function deleteTask(id) {
+      const clock = readClock();
+      if (clock && clock.task_id === id) write(KEYS.clock, null);
       const tasks = rawTasks();
       const kept = tasks.filter((t) => t.id !== id);
       if (kept.length !== tasks.length) write(KEYS.tasks, kept);
@@ -526,7 +589,7 @@
 
     return {
       getSettings, saveSettings, listTasks, addTask, updateTask, deleteTask, restoreTask, reorderTasks,
-      logSession, summary, pointsSummary, taskStats, heatmap, dayDetail, weeklyReview, sessionsCsv, exportBackup, importBackup,
+      startTaskClock, pauseTaskClock, runningTaskId, taskElapsedMs, logSession, summary, pointsSummary, taskStats, heatmap, dayDetail, weeklyReview, sessionsCsv, exportBackup, importBackup,
     };
   }
 
