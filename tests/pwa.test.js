@@ -54,6 +54,19 @@ test('settings include backup export and import controls', () => {
   });
 });
 
+test('reset today uses an accessible confirm modal, not window.confirm', () => {
+  const html = read('index.html');
+  ['reset-btn', 'reset-modal', 'reset-cancel-btn', 'reset-confirm-btn', 'reset-work', 'reset-break'].forEach((id) => {
+    assert.match(html, new RegExp(`id="${id}"`));
+  });
+  assert.match(html, /id="reset-modal"[^>]*aria-hidden="true"/);
+  assert.match(html, /role="alertdialog" aria-modal="true" aria-labelledby="reset-title" aria-describedby="reset-desc"/);
+  assert.match(html, /id="reset-btn"[^>]*aria-label=/, 'icon+text button is labelled');
+  const js = read('app.js');
+  assert.doesNotMatch(js, /window\.confirm|[^.\w]confirm\(/);
+  assert.match(js, /resetModal\.addEventListener\('keydown'[\s\S]*Escape/, 'Esc closes it');
+});
+
 test('page has the toast, confetti layer and day-detail panels the app drives', () => {
   const html = read('index.html');
   ['toast', 'toast-text', 'toast-action', 'toast-close', 'confetti', 'week-detail', 'heatmap-detail'].forEach((id) => {
