@@ -1,207 +1,95 @@
-// Web Audio API Ambient Sound Synthesizer (Procedural - Zero Assets)
+// Cat sounds, synthesised with the Web Audio API (no audio files): a sawtooth "voice" run through two
+// vocal-tract style formant filters. 'work' is a short, bright "mew!"; 'break' is a long, relaxed "mrrow~".
 
-class AmbientSoundEngine {
+const CAT_VOICES = {
+  work: {
+    duration: 0.42,
+    pitch: [540, 840, 600],       // Hz: start, peak, end
+    peakAt: 0.3,                  // peak position, as a share of the duration
+    formant1: [700, 1050, 640],
+    formant2: [1900, 2400, 1700],
+    vibrato: 0,
+    level: 0.5,
+  },
+  break: {
+    duration: 0.9,
+    pitch: [400, 640, 330],
+    peakAt: 0.35,
+    formant1: [620, 900, 560],
+    formant2: [1500, 2000, 1300],
+    vibrato: 7,
+    level: 0.45,
+  },
+};
+
+/** Schedule one meow on any AudioContext (live or offline) starting at `start` seconds. */
+function scheduleMeow(ctx, destination, kind, start) {
+  const v = CAT_VOICES[kind] || CAT_VOICES.work;
+  const end = start + v.duration;
+  const peak = start + v.duration * v.peakAt;
+
+  const sweep = (param, [from, top, to]) => {
+    param.setValueAtTime(from, start);
+    param.linearRampToValueAtTime(top, peak);
+    param.exponentialRampToValueAtTime(to, end);
+  };
+
+  const voice = ctx.createOscillator();
+  voice.type = 'sawtooth';
+  sweep(voice.frequency, v.pitch);
+
+  if (v.vibrato) {
+    const lfo = ctx.createOscillator();
+    const depth = ctx.createGain();
+    lfo.frequency.setValueAtTime(v.vibrato, start);
+    depth.gain.setValueAtTime(14, start);
+    lfo.connect(depth);
+    depth.connect(voice.frequency);
+    lfo.start(start);
+    lfo.stop(end + 0.05);
+  }
+
+  const out = ctx.createGain();
+  out.gain.setValueAtTime(0.0001, start);
+  out.gain.exponentialRampToValueAtTime(v.level, start + 0.04);
+  out.gain.exponentialRampToValueAtTime(v.level * 0.7, peak);
+  out.gain.exponentialRampToValueAtTime(0.0001, end);
+  out.connect(destination);
+
+  [[v.formant1, 1.6, 5], [v.formant2, 1, 8]].forEach(([freqs, gain, q]) => {
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.Q.setValueAtTime(q, start);
+    sweep(filter.frequency, freqs);
+    const level = ctx.createGain();
+    level.gain.setValueAtTime(gain, start);
+    voice.connect(filter);
+    filter.connect(level);
+    level.connect(out);
+  });
+
+  voice.start(start);
+  voice.stop(end + 0.05);
+}
+
+class CatSound {
   constructor() {
     this.audioCtx = null;
-    this.currentTrack = 'none';
-    this.isPlaying = false;
-    this.masterGainNode = null;
-    this.activeNodes = [];
-    this.volume = 0.5;
   }
 
-  init() {
-    if (!this.audioCtx) {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      this.audioCtx = new AudioContext();
-      this.masterGainNode = this.audioCtx.createGain();
-      this.masterGainNode.gain.setValueAtTime(this.volume, this.audioCtx.currentTime);
-      this.masterGainNode.connect(this.audioCtx.destination);
-    }
-    if (this.audioCtx.state === 'suspended') {
-      this.audioCtx.resume();
-    }
-  }
-
-  /** Short two-note chime marking the end of a session (independent of ambient volume). */
-  chime() {
+  /** Play a meow ('work' or 'break'). Call from a click or key press so the browser allows audio. */
+  meow(kind = 'work') {
     try {
-      this.init();
-      const ctx = this.audioCtx;
-      [659.25, 880].forEach((freq, i) => {
-        const start = ctx.currentTime + i * 0.25;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, start);
-        gain.gain.setValueAtTime(0.0001, start);
-        gain.gain.exponentialRampToValueAtTime(0.25, start + 0.03);
-        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.9);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(start);
-        osc.stop(start + 1);
-      });
-    } catch (e) { /* audio unavailable */ }
-  }
-
-  setVolume(val) {
-    this.volume = Math.max(0, Math.min(1, val));
-    if (this.masterGainNode && this.audioCtx) {
-      this.masterGainNode.gain.setTargetAtTime(this.volume, this.audioCtx.currentTime, 0.05);
-    }
-  }
-
-  stop() {
-    if (this.masterGainNode && this.audioCtx) {
-      this.masterGainNode.gain.setTargetAtTime(0, this.audioCtx.currentTime, 0.1);
-    }
-    setTimeout(() => {
-      this.activeNodes.forEach(node => {
-        try {
-          if (node.stop) node.stop();
-          if (node.disconnect) node.disconnect();
-        } catch (e) {}
-      });
-      this.activeNodes = [];
-      this.isPlaying = false;
-      this.currentTrack = 'none';
-    }, 150);
-  }
-
-  play(type) {
-    this.init();
-    if (this.currentTrack === type && this.isPlaying) {
-      this.stop();
-      return false;
-    }
-
-    this.stop();
-
-    setTimeout(() => {
-      this.masterGainNode.gain.setTargetAtTime(this.volume, this.audioCtx.currentTime, 0.1);
-      if (type === 'rain') {
-        this.createRainSound();
-      } else if (type === 'brown') {
-        this.createBrownNoiseSound();
-      } else if (type === 'forest') {
-        this.createForestSound();
+      if (!this.audioCtx) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        this.audioCtx = new AudioContext();
       }
-      this.currentTrack = type;
-      this.isPlaying = true;
-    }, 180);
-
-    return true;
-  }
-
-  // Generates 5 seconds of procedural Pink Noise
-  createPinkNoiseBuffer() {
-    const bufferSize = this.audioCtx.sampleRate * 4;
-    const buffer = this.audioCtx.createBuffer(1, bufferSize, this.audioCtx.sampleRate);
-    const data = buffer.getChannelData(0);
-    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-
-    for (let i = 0; i < bufferSize; i++) {
-      const white = Math.random() * 2 - 1;
-      b0 = 0.99886 * b0 + white * 0.0555179;
-      b1 = 0.99332 * b1 + white * 0.0750759;
-      b2 = 0.96900 * b2 + white * 0.1538520;
-      b3 = 0.86650 * b3 + white * 0.3104856;
-      b4 = 0.55000 * b4 + white * 0.5329522;
-      b5 = -0.7616 * b5 - white * 0.0168980;
-      data[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11;
-      b6 = white * 0.115926;
-    }
-    return buffer;
-  }
-
-  // Generates 4 seconds of Brown Noise (Deep focus rumble)
-  createBrownNoiseBuffer() {
-    const bufferSize = this.audioCtx.sampleRate * 4;
-    const buffer = this.audioCtx.createBuffer(1, bufferSize, this.audioCtx.sampleRate);
-    const data = buffer.getChannelData(0);
-    let lastOut = 0.0;
-
-    for (let i = 0; i < bufferSize; i++) {
-      const white = Math.random() * 2 - 1;
-      data[i] = (lastOut + (0.02 * white)) / 1.02;
-      lastOut = data[i];
-      data[i] *= 3.5; // Gain compensation
-    }
-    return buffer;
-  }
-
-  // Rain: Filtered pink noise + resonant high pass filter
-  createRainSound() {
-    const noiseBuffer = this.createPinkNoiseBuffer();
-    const noiseSource = this.audioCtx.createBufferSource();
-    noiseSource.buffer = noiseBuffer;
-    noiseSource.loop = true;
-
-    const lowpass = this.audioCtx.createBiquadFilter();
-    lowpass.type = 'lowpass';
-    lowpass.frequency.setValueAtTime(1200, this.audioCtx.currentTime);
-
-    const highpass = this.audioCtx.createBiquadFilter();
-    highpass.type = 'highpass';
-    highpass.frequency.setValueAtTime(320, this.audioCtx.currentTime);
-
-    noiseSource.connect(lowpass);
-    lowpass.connect(highpass);
-    highpass.connect(this.masterGainNode);
-
-    noiseSource.start();
-    this.activeNodes.push(noiseSource, lowpass, highpass);
-  }
-
-  // Brown noise (Deep focus / coffee shop background hum)
-  createBrownNoiseSound() {
-    const noiseBuffer = this.createBrownNoiseBuffer();
-    const noiseSource = this.audioCtx.createBufferSource();
-    noiseSource.buffer = noiseBuffer;
-    noiseSource.loop = true;
-
-    const lowpass = this.audioCtx.createBiquadFilter();
-    lowpass.type = 'lowpass';
-    lowpass.frequency.setValueAtTime(450, this.audioCtx.currentTime);
-
-    noiseSource.connect(lowpass);
-    lowpass.connect(this.masterGainNode);
-
-    noiseSource.start();
-    this.activeNodes.push(noiseSource, lowpass);
-  }
-
-  // Forest / Breeze: Modulated filtered noise
-  createForestSound() {
-    const noiseBuffer = this.createPinkNoiseBuffer();
-    const noiseSource = this.audioCtx.createBufferSource();
-    noiseSource.buffer = noiseBuffer;
-    noiseSource.loop = true;
-
-    const filter = this.audioCtx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(800, this.audioCtx.currentTime);
-    filter.Q.setValueAtTime(1.8, this.audioCtx.currentTime);
-
-    // LFO to simulate gentle wind swell
-    const lfo = this.audioCtx.createOscillator();
-    lfo.type = 'sine';
-    lfo.frequency.setValueAtTime(0.18, this.audioCtx.currentTime); // Gentle 5.5s cycle
-
-    const lfoGain = this.audioCtx.createGain();
-    lfoGain.gain.setValueAtTime(350, this.audioCtx.currentTime);
-
-    lfo.connect(lfoGain);
-    lfoGain.connect(filter.frequency);
-
-    noiseSource.connect(filter);
-    filter.connect(this.masterGainNode);
-
-    lfo.start();
-    noiseSource.start();
-    this.activeNodes.push(noiseSource, filter, lfo, lfoGain);
+      if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
+      scheduleMeow(this.audioCtx, this.audioCtx.destination, kind, this.audioCtx.currentTime + 0.02);
+    } catch (e) { /* audio unavailable */ }
   }
 }
 
-window.ambientSound = new AmbientSoundEngine();
+window.catSound = new CatSound();
+window.scheduleMeow = scheduleMeow;

@@ -498,3 +498,10 @@ test('a task counts one pomodoro for every 25 minutes of work logged on it', () 
   store.logSession({ task_id: a.id, duration_seconds: 27 * 60 });
   assert.equal(store.listTasks()[0].actual, 2);
 });
+
+test('cat sounds are a setting that defaults to on', () => {
+  const { store } = makeStore();
+  assert.equal(store.getSettings().cat_sound, 1);
+  assert.equal(store.saveSettings({ cat_sound: 0 }).cat_sound, 0);
+  assert.equal(store.saveSettings({ cat_sound: 5 }).cat_sound, 0, 'invalid values are ignored');
+});

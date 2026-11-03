@@ -620,59 +620,6 @@ body {
   display: block;
 }
 
-/* Ambient Sound Presets */
-.sound-presets {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.sound-chip {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: var(--surface-muted);
-  border: 1px solid var(--card-border);
-  border-radius: 14px;
-  padding: 10px 14px;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 0.86rem;
-  font-weight: 600;
-  color: var(--text-main);
-  transition: all 0.2s ease;
-  text-align: left;
-}
-
-.sound-chip:hover {
-  background: var(--surface);
-  border-color: var(--theme-accent);
-}
-
-.sound-chip.active {
-  background: var(--theme-accent-light);
-  border-color: var(--theme-accent);
-  color: var(--theme-accent);
-}
-
-.volume-slider-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 4px 2px;
-}
-
-.volume-slider-group input[type="range"] {
-  flex: 1;
-  accent-color: var(--theme-accent);
-  cursor: pointer;
-}
-
-.volume-icon {
-  font-size: 0.85rem;
-}
-
 /* Analytics & Metrics */
 .streak-badge {
   font-size: 0.8rem;
@@ -1327,7 +1274,6 @@ button.heat-cell:hover { transform: scale(1.25); }
 
 /* Touch targets: at least 44px on phones */
 .tab-btn,
-.sound-chip,
 .task-add-btn,
 .task-checkbox-btn,
 .task-delete-btn {
@@ -1536,26 +1482,6 @@ button.heat-cell:hover { transform: scale(1.25); }
     padding: 36px 32px 42px;
   }
 
-  /* Ambient sound sits under the timer: presets in one row */
-  .center-stage .sound-presets {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .center-stage .sound-chip {
-    flex-direction: column;
-    justify-content: center;
-    gap: 4px;
-    padding: 10px 6px;
-    text-align: center;
-  }
-
-  .center-stage .sound-chip .chip-label {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
-  }
 }
 
 /* Desktop: three columns, timer in the middle */
@@ -1579,7 +1505,7 @@ button.heat-cell:hover { transform: scale(1.25); }
     gap: 20px;
   }
 
-  /* Timer tab = the focus desk: tasks | timer + sound | today's score and focus.
+  /* Timer tab = the focus desk: tasks | timer | today's score and focus.
      Weekly review and insights live in the Stats tab. */
   body[data-view="timer"] .review-card,
   body[data-view="timer"] .insights-card {
@@ -1594,12 +1520,6 @@ button.heat-cell:hover { transform: scale(1.25); }
 
   body[data-view="timer"] .task-list {
     max-height: min(560px, calc(100vh - 300px));
-  }
-
-  /* Timer and sound share the width in the side column of Tasks / Stats */
-  body[data-view="tasks"] .ambient-card,
-  body[data-view="stats"] .ambient-card {
-    display: none;
   }
 
   .center-stage {
@@ -2203,20 +2123,6 @@ button.heat-cell:hover { transform: scale(1.25); }
 
   .task-list {
     max-height: none;
-  }
-
-  /* Ambient presets side by side as compact chips */
-  .sound-presets {
-    flex-direction: row;
-  }
-
-  .sound-chip {
-    flex: 1;
-    flex-direction: column;
-    gap: 4px;
-    padding: 10px 6px;
-    font-size: 0.76rem;
-    text-align: center;
   }
 
   /* Settings become a bottom sheet */

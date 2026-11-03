@@ -25,6 +25,7 @@
     auto_start: 0,
     daily_goal: 4,
     daily_points_goal: 10,
+    cat_sound: 1,
     theme: 'light',
   };
 
@@ -37,6 +38,7 @@
     auto_start: [0, 1],
     daily_goal: [1, 24],
     daily_points_goal: [1, 500],
+    cat_sound: [0, 1],
     theme: ['light', 'dark'],
   };
 

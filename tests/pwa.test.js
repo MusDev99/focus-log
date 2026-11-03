@@ -103,12 +103,19 @@ test('story points: picker on the task form, score card and a daily target setti
   assert.match(app, /daily_points_goal: parseInt\(settingPointsGoalInput\.value, 10\)/);
 });
 
-test('ambient sound sits under the timer, and the desktop timer tab leaves review and insights to Stats', () => {
-  const html = read('index.html');
-  const center = html.slice(html.indexOf('<section class="panel center-stage">'), html.indexOf('<!-- Right Panel'));
-  assert.ok(center.includes('class="panel-card ambient-card"'), 'ambient card is in the center column');
+test('the desktop timer tab leaves review and insights to Stats', () => {
   const css = read('style.css');
   assert.match(css, /body\[data-view="timer"\] \.review-card,\s*body\[data-view="timer"\] \.insights-card \{\s*display: none;/);
+});
+
+test('ambient sound is gone; the cat meows when switching between work and break, unless muted in settings', () => {
+  const html = read('index.html');
+  assert.doesNotMatch(html, /ambient|sound-chip|sound-presets/);
+  assert.match(html, /<input id="setting-sound" class="setting-toggle" type="checkbox">/);
+  const app = read('app.js');
+  assert.match(app, /config\.cat_sound\) window\.catSound\.meow\(workMode\)/);
+  assert.doesNotMatch(app, /ambientSound/);
+  assert.match(read('audio.js'), /window\.catSound = new CatSound\(\)/);
 });
 
 test('timer card has only Work and Break, a cat scene per mode, and the Overview tab', () => {

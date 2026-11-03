@@ -7,6 +7,7 @@ const { heatLevel, heatmapCells, estimateLabel, taskTextParts, taskDisplayText, 
 let config = {
   daily_goal: 4, // hours of work per day
   daily_points_goal: 10,
+  cat_sound: 1,
   theme: 'light'
 };
 
@@ -99,7 +100,10 @@ function saveActiveTask() {
 
 /** Refresh everything that depends on the mode or on a stretch having just been logged. */
 function afterModeChange() {
+  const before = workMode;
   workMode = store.getWorkState().mode;
+  // The cat announces a switch to work or to a break (not a stop, and not a task change within work)
+  if (workMode !== before && workMode !== 'idle' && config.cat_sound) window.catSound.meow(workMode);
   applyWorkUi();
   saveActiveTask();
   fetchTasks();
@@ -892,34 +896,6 @@ taskFormEl.addEventListener('submit', (e) => {
 });
 
 // ====================================================
-// Ambient Sound Controls
-// ====================================================
-const soundChips = document.querySelectorAll('.sound-chip');
-const soundStatusPill = document.getElementById('sound-status-pill');
-const ambientVolumeSlider = document.getElementById('ambient-volume');
-
-soundChips.forEach(chip => {
-  chip.addEventListener('click', () => {
-    const soundType = chip.dataset.sound;
-    const isNowPlaying = window.ambientSound.play(soundType);
-
-    soundChips.forEach(c => c.classList.remove('active'));
-    if (isNowPlaying) {
-      chip.classList.add('active');
-      soundStatusPill.textContent = 'Playing';
-      soundStatusPill.classList.remove('muted');
-    } else {
-      soundStatusPill.textContent = 'Muted';
-      soundStatusPill.classList.add('muted');
-    }
-  });
-});
-
-ambientVolumeSlider.addEventListener('input', (e) => {
-  window.ambientSound.setVolume(parseFloat(e.target.value));
-});
-
-// ====================================================
 // Focus Analytics
 // ====================================================
 const todayFocusMinsEl = document.getElementById('today-focus-mins');
@@ -1333,6 +1309,7 @@ const settingsForm = document.getElementById('settings-form');
 
 const settingGoalInput = document.getElementById('setting-goal');
 const settingPointsGoalInput = document.getElementById('setting-points-goal');
+const settingSoundInput = document.getElementById('setting-sound');
 
 let lastFocusedBeforeModal = null;
 
@@ -1377,6 +1354,7 @@ settingsModal.addEventListener('keydown', (e) => {
 function fillSettingsForm() {
   settingGoalInput.value = config.daily_goal;
   settingPointsGoalInput.value = config.daily_points_goal;
+  settingSoundInput.checked = Boolean(config.cat_sound);
 }
 
 function loadSettings() {
@@ -1390,7 +1368,8 @@ settingsForm.addEventListener('submit', (e) => {
   e.preventDefault();
   const updated = {
     daily_goal: parseInt(settingGoalInput.value, 10),
-    daily_points_goal: parseInt(settingPointsGoalInput.value, 10)
+    daily_points_goal: parseInt(settingPointsGoalInput.value, 10),
+    cat_sound: settingSoundInput.checked ? 1 : 0
   };
 
   config = { ...config, ...store.saveSettings(updated) };
