@@ -450,6 +450,26 @@
     </div>
   </div>
 
+  <!-- Confirm: reset today's counters -->
+  <div id="reset-modal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal-card confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="reset-title" aria-describedby="reset-desc">
+      <div class="confirm-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>
+        </svg>
+      </div>
+      <h3 id="reset-title" class="confirm-title">Reset today?</h3>
+      <p id="reset-desc" class="confirm-text">This clears today's work and break time. Earlier days are kept. This can't be undone.</p>
+      <div class="confirm-stats" aria-label="What will be cleared">
+        <div class="confirm-stat"><span class="confirm-stat-label">💼 Work</span><span id="reset-work" class="confirm-stat-val">0:00</span></div>
+        <div class="confirm-stat"><span class="confirm-stat-label">☕ Break</span><span id="reset-break" class="confirm-stat-val">0:00</span></div>
+      </div>
+      <div class="confirm-actions">
+        <button id="reset-cancel-btn" class="control-btn secondary-btn" type="button">Keep it</button>
+        <button id="reset-confirm-btn" class="control-btn danger-btn" type="button">Reset</button>
+      </div>
+    </div>
+  </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden>
     <span id="toast-text" class="toast-text"></span>

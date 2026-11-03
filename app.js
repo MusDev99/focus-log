@@ -142,20 +142,66 @@ function retargetWork(taskId) {
   if (store.getWorkState().mode === 'work') store.setWorkMode('work', taskId);
 }
 
+// ---- Reset today's counters (confirm modal: Esc / backdrop / Keep it cancel, focus trap, focus restore) ----
+const resetModal = document.getElementById('reset-modal');
+const resetCancelBtn = document.getElementById('reset-cancel-btn');
+const resetConfirmBtn = document.getElementById('reset-confirm-btn');
+let lastFocusedBeforeReset = null;
+
+/** Show the confirm modal with what is about to be cleared; focus starts on the safe choice. */
+function openResetModal() {
+  const t = store.todayTotals();
+  document.getElementById('reset-work').textContent = formatElapsed(t.work_ms);
+  document.getElementById('reset-break').textContent = formatElapsed(t.break_ms);
+  lastFocusedBeforeReset = document.activeElement;
+  resetModal.classList.add('open');
+  resetModal.setAttribute('aria-hidden', 'false');
+  resetCancelBtn.focus();
+}
+
+/** Hide the confirm modal and give focus back to where it was. */
+function closeResetModal() {
+  resetModal.classList.remove('open');
+  resetModal.setAttribute('aria-hidden', 'true');
+  if (lastFocusedBeforeReset && lastFocusedBeforeReset.focus) lastFocusedBeforeReset.focus();
+}
+
 /** Zero today's work and break counters (earlier days are kept); a running stretch restarts from now. */
 function resetToday() {
-  if (!window.confirm("Reset today's work and break time to 0:00? Earlier days are not affected.")) return;
   store.resetToday();
   goalReachedDay = null;
+  closeResetModal();
   fetchTasks();
   loadStats();
   updateClock();
-  showToast('Today\'s counters reset');
+  showToast("Today's counters reset");
 }
+
+document.getElementById('reset-btn').addEventListener('click', openResetModal);
+resetCancelBtn.addEventListener('click', closeResetModal);
+resetConfirmBtn.addEventListener('click', resetToday);
+resetModal.addEventListener('click', (e) => {
+  if (e.target === resetModal) closeResetModal();
+});
+resetModal.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeResetModal();
+    return;
+  }
+  if (e.key !== 'Tab') return;
+  const first = resetCancelBtn;
+  const last = resetConfirmBtn;
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
+  }
+});
 
 startBtnEl.addEventListener('click', toggleClock);
 stopBtnEl.addEventListener('click', stopClock);
-document.getElementById('reset-btn').addEventListener('click', resetToday);
 
 tabButtons.forEach(btn => {
   btn.addEventListener('click', () => (btn.dataset.mode === 'break' ? takeBreak() : startWork()));
@@ -164,7 +210,7 @@ tabButtons.forEach(btn => {
 // Keyboard shortcuts: Space switches work/break, 1 work, 2 break
 document.addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
-  if (settingsModal.classList.contains('open')) return;
+  if (document.querySelector('.modal-backdrop.open')) return; // a dialog is open: keys belong to it
   const action = shortcutAction(e.key, e.target);
   if (!action) return;
   e.preventDefault();
