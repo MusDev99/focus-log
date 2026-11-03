@@ -2,7 +2,7 @@
 // Pure timer helpers live in timer-core.js and the data layer in store.js (both unit-tested).
 
 const store = window.PomodoroStore.createStore(window.localStorage);
-const { heatLevel, heatmapCells, estimateLabel, taskTextParts, taskDisplayText, firstTaskLink, modeDuration, remainingSeconds, nextMode, snapshot, restore, formatTime, goalProgress, shortcutAction, STORAGE_KEY } = window.TimerCore;
+const { heatLevel, heatmapCells, estimateLabel, taskTextParts, taskDisplayText, firstTaskLink, formatElapsed, modeDuration, remainingSeconds, nextMode, snapshot, restore, formatTime, goalProgress, shortcutAction, STORAGE_KEY } = window.TimerCore;
 
 let config = {
   focus_duration: 25,
@@ -277,6 +277,15 @@ function restoreTimerState() {
   if (saved.running) startTimer(); else setButtonState(false);
 }
 
+/** After a reload, the task whose timer kept running is the focused task. */
+function resumeRunningTask() {
+  const id = store.runningTaskId();
+  if (!id) return;
+  activeTaskId = id;
+  syncActiveTaskPill();
+  renderTasks();
+}
+
 // ====================================================
 // Task Tracker (localStorage)
 // ====================================================
@@ -463,6 +472,14 @@ function renderTasks() {
       sp.title = `${task.points} story points`;
       meta.appendChild(sp);
     }
+    if (task.elapsed_ms || task.running) {
+      const time = document.createElement('span');
+      time.className = 'task-time-badge' + (task.running ? ' running' : '');
+      time.dataset.timeFor = task.id;
+      time.textContent = `⏱ ${formatElapsed(task.elapsed_ms)}`;
+      time.title = task.completed ? 'Total time spent' : 'Time spent so far';
+      meta.appendChild(time);
+    }
     if (task.quadrant) {
       const tag = document.createElement('span');
       tag.className = `task-quadrant-tag q${task.quadrant}`;
@@ -474,6 +491,22 @@ function renderTasks() {
     li.appendChild(handle);
     li.appendChild(checkBtn);
     li.appendChild(main);
+    if (!task.completed) {
+      const clockBtn = document.createElement('button');
+      clockBtn.className = 'task-clock-btn' + (task.running ? ' running' : '');
+      clockBtn.type = 'button';
+      const shown = taskDisplayText(task.text);
+      clockBtn.setAttribute('aria-label', task.running ? `Pause timer for "${shown}"` : `Start timer for "${shown}"`);
+      clockBtn.title = task.running ? 'Pause this task\'s timer' : 'Start this task\'s timer';
+      clockBtn.innerHTML = task.running
+        ? '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>'
+        : '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+      clockBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectActiveTask(task);
+      });
+      li.appendChild(clockBtn);
+    }
     li.appendChild(editBtn);
     li.appendChild(deleteBtn);
     taskListEl.appendChild(li);
@@ -545,6 +578,13 @@ function buildMatrixChip(task) {
     sp.className = 'matrix-chip-est matrix-chip-points';
     sp.textContent = pointsLabel(task.points);
     body.appendChild(sp);
+  }
+  if (task.elapsed_ms || task.running) {
+    const time = document.createElement('span');
+    time.className = 'matrix-chip-est matrix-chip-time' + (task.running ? ' running' : '');
+    time.dataset.timeFor = task.id;
+    time.textContent = `⏱ ${formatElapsed(task.elapsed_ms)}`;
+    body.appendChild(time);
   }
   body.addEventListener('pointerdown', (e) => startQuadrantDrag(e, li, task));
   body.addEventListener('contextmenu', (e) => e.preventDefault()); // long-press drags, no menu
@@ -679,16 +719,56 @@ function syncActiveTaskPill() {
     activeTaskPillEl.style.display = 'none';
     return;
   }
-  activeTaskPillEl.textContent = `🎯 ${taskDisplayText(task.text)}`;
+  const state = store.runningTaskId() === task.id ? '⏱' : '⏸';
+  activeTaskPillEl.textContent = `🎯 ${taskDisplayText(task.text)} · ${state} ${formatElapsed(store.taskElapsedMs(task.id))}`;
+  activeTaskPillEl.title = 'Click to stop focusing on this task';
   activeTaskPillEl.style.display = 'block';
 }
 
+/**
+ * Focus on a task and start its own timer (any other task's timer pauses and keeps its time).
+ * Selecting the task whose timer is running pauses it; selecting it again resumes.
+ */
 function selectActiveTask(task) {
-  activeTaskId = activeTaskId === task.id ? null : task.id;
-  syncActiveTaskPill();
-  renderTasks();
+  if (task.completed) return;
+  if (store.runningTaskId() === task.id) {
+    store.pauseTaskClock();
+  } else {
+    activeTaskId = task.id;
+    store.startTaskClock(task.id);
+  }
+  fetchTasks();
   saveTimerState();
 }
+
+/** Stop focusing on any task: its timer pauses and keeps the time. */
+function clearActiveTask() {
+  if (!activeTaskId) return;
+  store.pauseTaskClock();
+  activeTaskId = null;
+  fetchTasks();
+  saveTimerState();
+}
+
+activeTaskPillEl.setAttribute('role', 'button');
+activeTaskPillEl.tabIndex = 0;
+activeTaskPillEl.addEventListener('click', clearActiveTask);
+activeTaskPillEl.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  e.preventDefault();
+  clearActiveTask();
+});
+
+/** Tick the live time on the running task's badges and on the current-task label. */
+function updateTaskClocks() {
+  const id = store.runningTaskId();
+  if (id) {
+    const text = `⏱ ${formatElapsed(store.taskElapsedMs(id))}`;
+    document.querySelectorAll(`[data-time-for="${CSS.escape(id)}"]`).forEach(el => { el.textContent = text; });
+  }
+  if (activeTaskId) syncActiveTaskPill();
+}
+setInterval(updateTaskClocks, 1000);
 
 function addTask(text, estimate = 0, points = 0) {
   if (store.addTask(text, estimate, null, points)) fetchTasks();
@@ -698,20 +778,30 @@ function toggleTask(id, completed) {
   const task = tasks.find(t => t.id === id);
   const before = store.pointsSummary().today;
   store.updateTask(id, { completed });
+  if (completed && activeTaskId === id) {
+    activeTaskId = null; // finished: stop focusing on it (its timer already stopped)
+    saveTimerState();
+  }
   fetchTasks();
   if (!completed) return;
   document.querySelectorAll(`#task-list [data-id="${CSS.escape(id)}"], #task-matrix [data-id="${CSS.escape(id)}"]`)
     .forEach(el => el.classList.add('just-completed'));
-  if (!task || !task.points) return;
+  const spent = (tasks.find(t => t.id === id) || {}).elapsed_ms || 0;
+  if (!task || (!task.points && !spent)) return;
 
-  // Scored task: show the new total, celebrate crossing the daily target, and offer an undo
-  const { today, goal } = store.pointsSummary();
-  const targetJustHit = before < goal && today >= goal;
-  if (targetJustHit) {
-    celebrate('big');
-    buzz([30, 60, 30]);
+  // Show the time spent and/or the new points total, celebrate crossing the daily target, offer an undo
+  const parts = [];
+  if (task.points) {
+    const { today, goal } = store.pointsSummary();
+    const targetJustHit = before < goal && today >= goal;
+    if (targetJustHit) {
+      celebrate('big');
+      buzz([30, 60, 30]);
+    }
+    parts.push(targetJustHit ? `🎯 Target hit — ${today} SP today!` : `+${task.points} SP · ${today}/${goal} today`);
   }
-  showToast(targetJustHit ? `🎯 Target hit — ${today} SP today!` : `+${task.points} SP · ${today}/${goal} today`, {
+  if (spent) parts.unshift(`✅ Done in ${formatElapsed(spent)}`);
+  showToast(parts.join(' · '), {
     label: 'Undo',
     onClick: () => toggleTask(id, false),
   });
@@ -721,7 +811,7 @@ function toggleTask(id, completed) {
 function deleteTask(id) {
   const index = tasks.findIndex(t => t.id === id);
   if (index < 0) return;
-  const removed = tasks[index];
+  const removed = { ...tasks[index], elapsed_ms: store.taskElapsedMs(id) };
   const wasActive = activeTaskId === id;
   if (wasActive) {
     activeTaskId = null;
@@ -1604,5 +1694,6 @@ bottomNavBtns.forEach((btn) => btn.addEventListener('click', () => setView(btn.d
   fetchTasks();
   loadStats();
   restoreTimerState();
+  resumeRunningTask();
   registerServiceWorker();
 })();

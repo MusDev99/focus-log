@@ -2567,3 +2567,83 @@ button.heat-cell:hover { transform: scale(1.25); }
   width: 14px;
   height: 14px;
 }
+
+/* Per-task timers */
+.task-time-badge,
+.matrix-chip-time {
+  font-variant-numeric: tabular-nums;
+}
+
+.task-time-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: var(--surface-muted);
+}
+
+.task-time-badge.running,
+.matrix-chip-time.running {
+  color: #4fae84;
+}
+
+.task-time-badge.running {
+  background: color-mix(in srgb, #4fae84 16%, transparent);
+  animation: clock-pulse 2s ease-in-out infinite;
+}
+
+@keyframes clock-pulse {
+  50% { opacity: 0.65; }
+}
+
+.task-clock-btn {
+  position: relative;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  color: var(--theme-accent);
+  background: var(--theme-accent-light);
+  cursor: pointer;
+}
+
+.task-clock-btn.running {
+  color: #fff;
+  background: #4fae84;
+}
+
+.task-clock-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* bigger touch target without a bigger button */
+.task-clock-btn::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+}
+
+.task-clock-btn:focus-visible,
+.active-task-pill:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 2px;
+}
+
+.active-task-pill {
+  cursor: pointer;
+  max-width: 260px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-time-badge.running {
+    animation: none;
+  }
+}

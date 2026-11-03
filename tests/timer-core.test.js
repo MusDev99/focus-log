@@ -150,3 +150,12 @@ test('taskDisplayText and firstTaskLink', () => {
   assert.equal(T.firstTaskLink(text), 'https://dev-log-minute-meeting.vercel.app/meetings/42');
   assert.equal(T.firstTaskLink('plain'), null);
 });
+
+test('formatElapsed shows m:ss, and h:mm:ss from one hour', () => {
+  assert.equal(T.formatElapsed(0), '0:00');
+  assert.equal(T.formatElapsed(30000), '0:30');
+  assert.equal(T.formatElapsed(754000), '12:34');
+  assert.equal(T.formatElapsed(3600000), '1:00:00');
+  assert.equal(T.formatElapsed(3725999), '1:02:05');
+  assert.equal(T.formatElapsed(-5), '0:00');
+});

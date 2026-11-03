@@ -71,6 +71,15 @@
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   }
 
+  /** Time spent as "m:ss" (or "h:mm:ss" from one hour), from milliseconds. */
+  function formatElapsed(ms) {
+    const total = Math.max(0, Math.floor(ms / 1000));
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = String(total % 60).padStart(2, '0');
+    return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
+  }
+
   /** Daily goal progress as {done, goal, percent (0-100), reached}. */
   function goalProgress(done, goal) {
     const g = Math.max(1, goal | 0);
@@ -161,7 +170,7 @@
   }
 
   return {
-    heatLevel, heatmapCells, estimateLabel, shortUrl, taskTextParts, taskDisplayText, firstTaskLink,
+    heatLevel, heatmapCells, estimateLabel, formatElapsed, shortUrl, taskTextParts, taskDisplayText, firstTaskLink,
     MODES, STORAGE_KEY, modeDuration, remainingSeconds, nextMode,
     snapshot, restore, formatTime, goalProgress, shortcutAction,
   };
