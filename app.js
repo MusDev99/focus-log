@@ -2,7 +2,7 @@
 // Pure timer helpers live in timer-core.js and the data layer in store.js (both unit-tested).
 
 const store = window.PomodoroStore.createStore(window.localStorage);
-const { heatLevel, heatmapCells, estimateLabel, modeDuration, remainingSeconds, nextMode, snapshot, restore, formatTime, goalProgress, shortcutAction, STORAGE_KEY } = window.TimerCore;
+const { heatLevel, heatmapCells, estimateLabel, taskTextParts, taskDisplayText, firstTaskLink, modeDuration, remainingSeconds, nextMode, snapshot, restore, formatTime, goalProgress, shortcutAction, STORAGE_KEY } = window.TimerCore;
 
 let config = {
   focus_duration: 25,
@@ -322,6 +322,26 @@ function fetchTasks() {
 
 const pointsLabel = (points) => `${points} SP`;
 
+/** Fill `el` with the task text, links clickable (opened in a new tab, never as the task tap). */
+function renderTaskText(el, text) {
+  el.textContent = '';
+  taskTextParts(text).forEach((part) => {
+    if (part.type === 'text') {
+      el.append(part.value);
+      return;
+    }
+    const a = document.createElement('a');
+    a.className = 'task-link';
+    a.href = part.href;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = part.label;
+    a.title = part.href;
+    a.addEventListener('click', (e) => e.stopPropagation());
+    el.appendChild(a);
+  });
+}
+
 function updateTaskCounter() {
   const total = tasks.length;
   const completed = tasks.filter(t => t.completed).length;
@@ -348,7 +368,7 @@ function renderTasks() {
     const handle = document.createElement('button');
     handle.className = 'task-drag-handle';
     handle.type = 'button';
-    handle.setAttribute('aria-label', `Reorder "${task.text}" (drag, or use arrow keys)`);
+    handle.setAttribute('aria-label', `Reorder "${taskDisplayText(task.text)}" (drag, or use arrow keys)`);
     handle.innerHTML = `
       <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
         <circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/>
@@ -386,7 +406,7 @@ function renderTasks() {
     // Task text
     const textSpan = document.createElement('span');
     textSpan.className = 'task-text';
-    textSpan.textContent = task.text;
+    renderTaskText(textSpan, task.text);
     textSpan.addEventListener('click', () => selectActiveTask(task));
 
     // Edit button
@@ -491,7 +511,8 @@ function buildMatrixChip(task) {
   const check = document.createElement('button');
   check.type = 'button';
   check.className = 'matrix-check';
-  check.setAttribute('aria-label', task.completed ? `Mark "${task.text}" incomplete` : `Mark "${task.text}" complete`);
+  const shown = taskDisplayText(task.text);
+  check.setAttribute('aria-label', task.completed ? `Mark "${shown}" incomplete` : `Mark "${shown}" complete`);
   check.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
   check.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -507,10 +528,10 @@ function buildMatrixChip(task) {
   body.type = 'button';
   body.className = 'matrix-chip-body';
   const where = task.quadrant ? `in Q${task.quadrant} ${QUADRANTS[task.quadrant].name}` : 'unsorted';
-  body.setAttribute('aria-label', `${task.text}, ${where}. Tap to focus on it, drag to move, or press 1 to 4 to move, 0 to unsort.`);
+  body.setAttribute('aria-label', `${shown}, ${where}. Tap to focus on it, drag to move, or press 1 to 4 to move, 0 to unsort.`);
   const title = document.createElement('span');
   title.className = 'matrix-chip-text';
-  title.textContent = task.text;
+  title.textContent = shown; // the chip is a button, so its link opens from the icon beside it
   body.appendChild(title);
   const label = estimateLabel(task.actual, task.estimate);
   if (label) {
@@ -539,6 +560,19 @@ function buildMatrixChip(task) {
   });
 
   li.append(check, body);
+  const href = firstTaskLink(task.text);
+  if (href) {
+    const link = document.createElement('a');
+    link.className = 'matrix-chip-link';
+    link.href = href;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.title = href;
+    link.setAttribute('aria-label', `Open link for "${shown}"`);
+    link.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7"></path><path d="M10 14 21 3"></path><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"></path></svg>';
+    link.addEventListener('pointerdown', (e) => e.stopPropagation());
+    li.appendChild(link);
+  }
   return li;
 }
 
@@ -645,7 +679,7 @@ function syncActiveTaskPill() {
     activeTaskPillEl.style.display = 'none';
     return;
   }
-  activeTaskPillEl.textContent = `🎯 ${task.text}`;
+  activeTaskPillEl.textContent = `🎯 ${taskDisplayText(task.text)}`;
   activeTaskPillEl.style.display = 'block';
 }
 
@@ -696,7 +730,7 @@ function deleteTask(id) {
   }
   store.deleteTask(id);
   fetchTasks();
-  showToast(`Deleted “${removed.text}”`, {
+  showToast(`Deleted “${taskDisplayText(removed.text)}”`, {
     label: 'Undo',
     onClick: () => {
       if (!store.restoreTask(removed, index)) return;
@@ -714,7 +748,7 @@ function startTaskEdit(li, task) {
   const input = document.createElement('input');
   input.className = 'task-edit-input';
   input.value = task.text;
-  input.maxLength = 80;
+  input.maxLength = 200;
   input.setAttribute('aria-label', 'Edit task');
   // Story points can be changed while editing, next to the title
   const points = taskPointsEl.cloneNode(true);
@@ -936,7 +970,7 @@ function loadScore() {
     const li = document.createElement('li');
     const text = document.createElement('span');
     text.className = 'score-done-text';
-    text.textContent = t.text;
+    text.textContent = taskDisplayText(t.text);
     const pts = document.createElement('span');
     pts.className = 'score-done-points';
     pts.textContent = `+${t.points}`;
@@ -1029,7 +1063,7 @@ function renderReview(r) {
 
   reviewSessionsEl.textContent = r.this_week.sessions;
   reviewBestDayEl.textContent = r.best_day ? `${r.best_day.label} · ${Math.round(r.best_day.minutes)}m` : '—';
-  reviewTopTaskEl.textContent = r.top_task ? `${r.top_task.label} · ${Math.round(r.top_task.minutes)}m` : '—';
+  reviewTopTaskEl.textContent = r.top_task ? `${taskDisplayText(r.top_task.label)} · ${Math.round(r.top_task.minutes)}m` : '—';
   reviewLongestStreakEl.textContent = `${r.longest_streak} ${r.longest_streak === 1 ? 'day' : 'days'}`;
 }
 
@@ -1085,7 +1119,7 @@ function renderDayDetail(el, dateKey, onClose) {
   d.tasks.forEach((t) => {
     const li = document.createElement('li');
     const name = document.createElement('span');
-    name.textContent = t.label;
+    name.textContent = taskDisplayText(t.label);
     const meta = document.createElement('span');
     meta.className = 'day-detail-meta';
     meta.textContent = `${t.sessions} 🍅 · ${Math.round(t.minutes)}m`;
@@ -1157,7 +1191,7 @@ function renderTaskStats(rows) {
     li.className = 'task-stat-row';
     const name = document.createElement('span');
     name.className = 'task-stat-name';
-    name.textContent = row.label;
+    name.textContent = taskDisplayText(row.label);
     const meta = document.createElement('span');
     meta.className = 'task-stat-meta';
     meta.textContent = `${row.sessions} 🍅 · ${Math.round(row.minutes)}m`;

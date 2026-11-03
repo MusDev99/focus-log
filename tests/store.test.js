@@ -44,11 +44,11 @@ test('task CRUD trims text, clamps estimate and gives unique ids', () => {
   const { store } = makeStore();
   assert.equal(store.addTask('   '), null);
   const a = store.addTask('  Write report  ', 50);
-  const b = store.addTask('x'.repeat(200), -3);
+  const b = store.addTask('x'.repeat(300), -3);
   assert.notEqual(a.id, b.id);
   assert.equal(a.text, 'Write report');
   assert.equal(a.estimate, 20);
-  assert.equal(b.text.length, 80);
+  assert.equal(b.text.length, 200);
   assert.equal(b.estimate, 0);
 
   assert.equal(store.updateTask(a.id, { completed: true }), true);

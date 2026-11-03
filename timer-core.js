@@ -114,8 +114,54 @@
     return `${actual}/${estimate} 🍅`;
   }
 
+  // http(s) links, or www. ones; trailing punctuation belongs to the sentence, not the link
+  const URL_RE = /\b(?:https?:\/\/|www\.)[^\s<>"']+/gi;
+  const TRAILING_RE = /[.,;:!?)\]}'"]+$/;
+
+  /** Short, readable form of a URL: host (no www.) plus path, cut to `max` chars. */
+  function shortUrl(href, max = 40) {
+    let label;
+    try {
+      const u = new URL(href);
+      label = u.hostname.replace(/^www\./, '') + (u.pathname === '/' ? '' : u.pathname) + u.search + u.hash;
+    } catch (e) {
+      label = href;
+    }
+    return label.length > max ? label.slice(0, max - 1) + '…' : label;
+  }
+
+  /**
+   * Split task text into plain text and links, for rendering without innerHTML:
+   * [{type:'text', value}, {type:'link', href, label}]. Only http(s) links are produced.
+   */
+  function taskTextParts(text) {
+    const parts = [];
+    let last = 0;
+    String(text).replace(URL_RE, (match, offset) => {
+      const raw = match.replace(TRAILING_RE, '');
+      if (offset > last) parts.push({ type: 'text', value: text.slice(last, offset) });
+      const href = /^www\./i.test(raw) ? `https://${raw}` : raw;
+      parts.push({ type: 'link', href, label: shortUrl(href) });
+      last = offset + raw.length;
+      return match;
+    });
+    if (last < text.length) parts.push({ type: 'text', value: text.slice(last) });
+    return parts;
+  }
+
+  /** Task text with links shortened, for places that show plain text (pill, stats, toasts). */
+  function taskDisplayText(text) {
+    return taskTextParts(text).map(p => (p.type === 'link' ? p.label : p.value)).join('');
+  }
+
+  /** First link in the task text, or null. */
+  function firstTaskLink(text) {
+    const link = taskTextParts(text).find(p => p.type === 'link');
+    return link ? link.href : null;
+  }
+
   return {
-    heatLevel, heatmapCells, estimateLabel,
+    heatLevel, heatmapCells, estimateLabel, shortUrl, taskTextParts, taskDisplayText, firstTaskLink,
     MODES, STORAGE_KEY, modeDuration, remainingSeconds, nextMode,
     snapshot, restore, formatTime, goalProgress, shortcutAction,
   };
