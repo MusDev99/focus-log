@@ -142,8 +142,20 @@ function retargetWork(taskId) {
   if (store.getWorkState().mode === 'work') store.setWorkMode('work', taskId);
 }
 
+/** Zero today's work and break counters (earlier days are kept); a running stretch restarts from now. */
+function resetToday() {
+  if (!window.confirm("Reset today's work and break time to 0:00? Earlier days are not affected.")) return;
+  store.resetToday();
+  goalReachedDay = null;
+  fetchTasks();
+  loadStats();
+  updateClock();
+  showToast('Today\'s counters reset');
+}
+
 startBtnEl.addEventListener('click', toggleClock);
 stopBtnEl.addEventListener('click', stopClock);
+document.getElementById('reset-btn').addEventListener('click', resetToday);
 
 tabButtons.forEach(btn => {
   btn.addEventListener('click', () => (btn.dataset.mode === 'break' ? takeBreak() : startWork()));
