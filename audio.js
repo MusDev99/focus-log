@@ -1,6 +1,7 @@
-// Character sounds, synthesised with the Web Audio API (no audio files): a sawtooth "voice" run through
-// two vocal-tract style formant filters. Per character, 'work' is a short, bright call (mew / woof / moo /
-// oink) and 'break' a longer, relaxed one.
+// Character sounds: each character plays its recorded clip (sounds/*.mp3, see SAMPLE_FILES below). These
+// voices are the fallback when a clip cannot load: synthesised with the Web Audio API, a sawtooth "voice"
+// run through two vocal-tract style formant filters. Per character, 'work' is a short, bright call
+// (mew / woof / moo / oink) and 'break' a longer, relaxed one.
 
 const CAT_VOICES = {
   work: {
@@ -90,9 +91,9 @@ function scheduleMeow(ctx, destination, kind, start, character = 'cat') {
   voice.stop(end + 0.05);
 }
 
-// Recorded calls (short mp3s, precached by the service worker). The cat has none and keeps the synthesised
-// voice, which is also the fallback if a clip fails to load or decode.
-const SAMPLE_FILES = { dog: 'sounds/dog.mp3', cow: 'sounds/cow.mp3', pig: 'sounds/pig.mp3' };
+// Recorded calls (short mp3s, precached by the service worker). The synthesised voices above are the
+// fallback if a clip fails to load or decode.
+const SAMPLE_FILES = { cat: 'sounds/meow.mp3', dog: 'sounds/dog.mp3', cow: 'sounds/cow.mp3', pig: 'sounds/pig.mp3' };
 const SAMPLE_LEVEL = { work: 1, break: 0.7 }; // a break call is quieter
 
 class CatSound {

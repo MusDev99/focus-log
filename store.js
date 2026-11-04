@@ -269,13 +269,24 @@
       const cur = getWorkState();
       let logged = null;
       if (cur.mode !== 'idle') {
-        const seconds = Math.min(MAX_SESSION_SECONDS, Math.round(liveMs({ since: cur.since }) / 1000));
-        if (seconds >= 1) {
-          logged = logSession({
-            mode: cur.mode === 'work' ? 'focus' : 'shortBreak',
-            duration_seconds: seconds,
-            task_id: cur.mode === 'work' ? cur.task_id : null,
-          });
+        // A stretch that crosses midnight is split into one session per calendar day, each dated on its own day.
+        const end = now();
+        let from = new Date(cur.since);
+        while (from < end) {
+          const nextMidnight = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1);
+          const last = nextMidnight >= end;
+          const to = last ? end : nextMidnight;
+          const seconds = Math.min(MAX_SESSION_SECONDS, Math.round((to - from) / 1000));
+          if (seconds >= 1) {
+            logged = logSession({
+              mode: cur.mode === 'work' ? 'focus' : 'shortBreak',
+              duration_seconds: seconds,
+              task_id: cur.mode === 'work' ? cur.task_id : null,
+              // a segment ending at midnight is dated 1 ms earlier so it stays on the day it belongs to
+              ended_at: last ? end : new Date(nextMidnight.getTime() - 1),
+            });
+          }
+          from = nextMidnight;
         }
       }
       write(KEYS.work, mode === 'idle' ? null : {
@@ -296,13 +307,31 @@
       });
       const cur = getWorkState();
       const stretch = cur.mode === 'idle' ? 0 : liveMs({ since: cur.since });
+      // only the part of the running stretch after today's midnight belongs to today
+      const n = now();
+      const midnight = new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime();
+      const todayStretch = cur.mode === 'idle' ? 0 : Math.max(0, n.getTime() - Math.max(cur.since, midnight));
       return {
         mode: cur.mode,
         task_id: cur.task_id,
         stretch_ms: stretch,
-        work_ms: work + (cur.mode === 'work' ? stretch : 0),
-        break_ms: rest + (cur.mode === 'break' ? stretch : 0),
+        work_ms: work + (cur.mode === 'work' ? todayStretch : 0),
+        break_ms: rest + (cur.mode === 'break' ? todayStretch : 0),
       };
+    }
+
+    /**
+     * Reset today's work and break counters: today's logged sessions are removed (earlier days are untouched)
+     * and a running stretch restarts from now. Returns how many sessions were removed.
+     */
+    function resetToday() {
+      const todayKey = localDayKey(now());
+      const sessions = rawSessions();
+      const kept = sessions.filter((s) => localDayKey(new Date(s.completed_at)) !== todayKey);
+      if (kept.length !== sessions.length) write(KEYS.sessions, kept);
+      const cur = getWorkState();
+      if (cur.mode !== 'idle') write(KEYS.work, { mode: cur.mode, since: now().getTime(), task_id: cur.task_id });
+      return sessions.length - kept.length;
     }
 
     /** Tasks in creation order, each with `actual` = focus sessions logged against it. */
@@ -428,12 +457,12 @@
       return { tasks: newTasks.length, sessions: newSessions.length };
     }
 
-    function logSession({ mode = 'focus', duration_seconds = 1500, task_id = null } = {}) {
+    function logSession({ mode = 'focus', duration_seconds = 1500, task_id = null, ended_at = null } = {}) {
       if (!VALID_MODES.includes(mode)) return null;
       if (!Number.isInteger(duration_seconds) || duration_seconds < 1 || duration_seconds > MAX_SESSION_SECONDS) return null;
       const session = {
         id: newId(), mode, duration_seconds,
-        completed_at: now().toISOString(),
+        completed_at: (ended_at instanceof Date ? ended_at : now()).toISOString(),
         task_id: task_id == null ? null : String(task_id),
       };
       write(KEYS.sessions, rawSessions().concat(session));
@@ -650,7 +679,7 @@
 
     return {
       getSettings, saveSettings, listTasks, addTask, updateTask, deleteTask, restoreTask, reorderTasks,
-      startTaskClock, pauseTaskClock, runningTaskId, taskElapsedMs, getWorkState, setWorkMode, todayTotals, logSession, summary, pointsSummary, taskStats, heatmap, dayDetail, weeklyReview, sessionsCsv, exportBackup, importBackup,
+      startTaskClock, pauseTaskClock, runningTaskId, taskElapsedMs, getWorkState, setWorkMode, todayTotals, resetToday, logSession, summary, pointsSummary, taskStats, heatmap, dayDetail, weeklyReview, sessionsCsv, exportBackup, importBackup,
     };
   }
 

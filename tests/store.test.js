@@ -490,6 +490,42 @@ test('switching task while working splits the stretch per task; sub-second stret
   assert.equal(store.todayTotals().work_ms, 120000);
 });
 
+test('a work stretch crossing midnight is split across both days', () => {
+  const { store, clock } = makeStore(new Date(2026, 9, 28, 23, 30, 0));
+  store.setWorkMode('work');
+  clock.t = new Date(2026, 9, 29, 0, 20, 0); // 30 min before midnight + 20 min after
+  const t = store.todayTotals();
+  assert.equal(t.stretch_ms, 50 * 60000, 'the stretch itself is continuous');
+  assert.equal(t.work_ms, 20 * 60000, 'only the part after midnight counts for the new day');
+  store.setWorkMode('idle');
+  const days = store.summary().daily_breakdown;
+  assert.deepEqual(days.slice(-2).map((d) => [d.date, d.minutes]), [['2026-10-28', 30], ['2026-10-29', 20]]);
+  assert.equal(store.todayTotals().work_ms, 20 * 60000);
+});
+
+test('a stretch spanning several midnights logs one session per day', () => {
+  const { store, clock } = makeStore(new Date(2026, 9, 27, 23, 0, 0));
+  store.setWorkMode('break');
+  clock.t = new Date(2026, 9, 29, 1, 0, 0);
+  store.setWorkMode('idle');
+  assert.deepEqual(store.todayTotals(), { mode: 'idle', task_id: null, stretch_ms: 0, work_ms: 0, break_ms: 3600000 });
+});
+
+test('resetToday zeroes today but keeps earlier days, and restarts a running stretch', () => {
+  const { store, clock } = makeStore();
+  store.logSession({ duration_seconds: 1800, ended_at: new Date(2026, 9, 27, 12, 0, 0) });
+  store.setWorkMode('work');
+  clock.t = new Date(clock.t.getTime() + 600000);
+  store.setWorkMode('break');
+  clock.t = new Date(clock.t.getTime() + 120000);
+  assert.deepEqual([store.todayTotals().work_ms, store.todayTotals().break_ms], [600000, 120000]);
+
+  assert.equal(store.resetToday(), 1, 'the logged work session is removed');
+  const t = store.todayTotals();
+  assert.deepEqual([t.work_ms, t.break_ms, t.stretch_ms, t.mode], [0, 0, 0, 'break']);
+  assert.equal(store.summary().total_minutes, 30, 'yesterday survives');
+});
+
 test('a task counts one pomodoro for every 25 minutes of work logged on it', () => {
   const { store } = makeStore();
   const a = store.addTask('Deep work', 3);

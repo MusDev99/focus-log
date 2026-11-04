@@ -54,6 +54,19 @@ test('settings include backup export and import controls', () => {
   });
 });
 
+test('reset today uses an accessible confirm modal, not window.confirm', () => {
+  const html = read('index.html');
+  ['reset-btn', 'reset-modal', 'reset-cancel-btn', 'reset-confirm-btn', 'reset-work', 'reset-break'].forEach((id) => {
+    assert.match(html, new RegExp(`id="${id}"`));
+  });
+  assert.match(html, /id="reset-modal"[^>]*aria-hidden="true"/);
+  assert.match(html, /role="alertdialog" aria-modal="true" aria-labelledby="reset-title" aria-describedby="reset-desc"/);
+  assert.match(html, /id="reset-btn"[^>]*aria-label=/, 'icon+text button is labelled');
+  const js = read('app.js');
+  assert.doesNotMatch(js, /window\.confirm|[^.\w]confirm\(/);
+  assert.match(js, /resetModal\.addEventListener\('keydown'[\s\S]*Escape/, 'Esc closes it');
+});
+
 test('page has the toast, confetti layer and day-detail panels the app drives', () => {
   const html = read('index.html');
   ['toast', 'toast-text', 'toast-action', 'toast-close', 'confetti', 'week-detail', 'heatmap-detail'].forEach((id) => {
@@ -115,7 +128,11 @@ test('ambient sound is gone; the cat meows when switching between work and break
   const app = read('app.js');
   assert.match(app, /config\.cat_sound\) window\.catSound\.meow\(workMode, config\.character\)/);
   assert.doesNotMatch(app, /ambientSound/);
-  assert.match(read('audio.js'), /window\.catSound = new CatSound\(\)/);
+  const audio = read('audio.js');
+  assert.match(audio, /window\.catSound = new CatSound\(\)/);
+  assert.match(audio, /cat: 'sounds\/meow\.mp3'/);
+  assert.ok(fs.statSync(path.join(root, 'sounds/meow.mp3')).size > 1000, 'the meow file ships with the app');
+  assert.ok(shellPaths().includes('./sounds/meow.mp3'), 'and is cached for offline use');
 });
 
 test('timer card has only Work and Break, a cat scene per mode, and the Overview tab', () => {
@@ -152,12 +169,13 @@ test('the character (cat, dog, cow, pig) is drawn, voiced, saved as a setting an
   assert.match(app, /catStageEl\.addEventListener\('click', nextCharacter\)/);
 });
 
-test('dog, cow and pig play recorded clips that the service worker precaches; the cat stays synthesised', () => {
+test('every character plays a recorded clip that the service worker precaches, with the synthesised voice as fallback', () => {
   const audio = read('audio.js');
+  assert.ok(audio.includes("cat: 'sounds/meow.mp3'"), 'cat clip wired');
+  assert.ok(shellPaths().includes('./sounds/meow.mp3'), 'meow.mp3 precached');
   ['dog', 'cow', 'pig'].forEach((c) => {
     assert.ok(audio.includes(`${c}: 'sounds/${c}.mp3'`), `${c} clip wired`);
     assert.ok(fs.existsSync(path.join(root, 'sounds', `${c}.mp3`)), `${c}.mp3 exists`);
     assert.ok(shellPaths().includes(`./sounds/${c}.mp3`), `${c}.mp3 precached`);
   });
-  assert.doesNotMatch(audio, /cat: 'sounds/);
 });

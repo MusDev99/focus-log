@@ -417,9 +417,10 @@ body {
 /* Timer Controls */
 .controls-container {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 12px;
   width: 100%;
 }
 
@@ -863,6 +864,105 @@ body {
 
 .modal-footer {
   margin-top: 10px;
+}
+
+/* Confirm dialog (reset today) */
+.confirm-card {
+  text-align: center;
+  max-width: 360px;
+}
+
+.confirm-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 16px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #e8677c;
+  background: var(--accent-focus-light);
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent-focus-light) 45%, transparent);
+}
+
+.confirm-icon svg {
+  width: 30px;
+  height: 30px;
+}
+
+.confirm-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 8px;
+}
+
+.confirm-text {
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin-bottom: 18px;
+}
+
+.confirm-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+
+.confirm-stat {
+  background: var(--surface-muted);
+  border-radius: 16px;
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.confirm-stat-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.confirm-stat-val {
+  font-size: 1.2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-main);
+}
+
+.confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.confirm-actions .control-btn {
+  width: 100%;
+  padding: 14px 16px;
+}
+
+.danger-btn {
+  background: #e8677c;
+  color: #ffffff;
+  box-shadow: 0 10px 20px -8px rgba(232, 103, 124, 0.55);
+}
+
+.danger-btn:hover {
+  filter: brightness(1.06);
+}
+
+.confirm-actions .control-btn:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--text-main) 55%, transparent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-backdrop,
+  .modal-card {
+    transition: none;
+  }
 }
 
 /* Top-bar buttons side by side */
@@ -2179,14 +2279,15 @@ button.heat-cell:hover { transform: scale(1.25); }
   }
 }
 
-@media (max-width: 360px) {
-  .secondary-btn span {
-    display: none;
-  }
+/* Main action takes the full row; Stop and Reset share the row below, equal width (any screen width) */
+.controls-container .primary-btn {
+  flex: 1 1 100%;
+}
 
-  .secondary-btn {
-    padding: 14px 16px;
-  }
+.controls-container .secondary-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 14px 16px;
 }
 
 /* No hover on touch screens: avoid sticky hover states */
