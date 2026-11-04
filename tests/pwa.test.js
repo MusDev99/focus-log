@@ -151,3 +151,13 @@ test('the character (cat, dog, cow, pig) is drawn, voiced, saved as a setting an
   assert.match(app, /CHARACTERS\[\(CHARACTERS\.indexOf\(config\.character\) \+ 1\) % CHARACTERS\.length\]/);
   assert.match(app, /catStageEl\.addEventListener\('click', nextCharacter\)/);
 });
+
+test('dog, cow and pig play recorded clips that the service worker precaches; the cat stays synthesised', () => {
+  const audio = read('audio.js');
+  ['dog', 'cow', 'pig'].forEach((c) => {
+    assert.ok(audio.includes(`${c}: 'sounds/${c}.mp3'`), `${c} clip wired`);
+    assert.ok(fs.existsSync(path.join(root, 'sounds', `${c}.mp3`)), `${c}.mp3 exists`);
+    assert.ok(shellPaths().includes(`./sounds/${c}.mp3`), `${c}.mp3 precached`);
+  });
+  assert.doesNotMatch(audio, /cat: 'sounds/);
+});

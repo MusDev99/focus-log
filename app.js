@@ -81,6 +81,7 @@ function checkGoalReached(workMs) {
 function applyCharacter() {
   catStageEl.setAttribute('data-char', config.character);
   catStageEl.setAttribute('aria-label', `Change character, now ${config.character}`);
+  if (config.cat_sound) window.catSound.preload(config.character);
 }
 
 /** Tapping the stage switches to the next character: cat → dog → cow → pig → cat. */

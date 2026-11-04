@@ -90,21 +90,66 @@ function scheduleMeow(ctx, destination, kind, start, character = 'cat') {
   voice.stop(end + 0.05);
 }
 
+// Recorded calls (short mp3s, precached by the service worker). The cat has none and keeps the synthesised
+// voice, which is also the fallback if a clip fails to load or decode.
+const SAMPLE_FILES = { dog: 'sounds/dog.mp3', cow: 'sounds/cow.mp3', pig: 'sounds/pig.mp3' };
+const SAMPLE_LEVEL = { work: 1, break: 0.7 }; // a break call is quieter
+
 class CatSound {
   constructor() {
     this.audioCtx = null;
+    this.samples = {}; // character -> Promise<AudioBuffer | null>
+  }
+
+  context() {
+    if (!this.audioCtx) {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return null;
+      this.audioCtx = new AudioContext();
+    }
+    return this.audioCtx;
+  }
+
+  /** Fetch and decode a character's recording once; resolves null when there is none or it fails. */
+  sample(character) {
+    const file = SAMPLE_FILES[character];
+    const ctx = this.context();
+    if (!file || !ctx) return Promise.resolve(null);
+    if (!this.samples[character]) {
+      this.samples[character] = fetch(file)
+        .then((res) => (res.ok ? res.arrayBuffer() : Promise.reject(new Error('sample missing'))))
+        .then((data) => ctx.decodeAudioData(data))
+        .catch(() => null);
+    }
+    return this.samples[character];
+  }
+
+  /** Warm the chosen character's recording so the first call plays without delay. */
+  preload(character) {
+    try { this.sample(character); } catch (e) { /* audio unavailable */ }
   }
 
   /** Play a call ('work' or 'break') in the character's voice. Call from a click or key press so the browser allows audio. */
   meow(kind = 'work', character = 'cat') {
     try {
-      if (!this.audioCtx) {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        if (!AudioContext) return;
-        this.audioCtx = new AudioContext();
-      }
-      if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
-      scheduleMeow(this.audioCtx, this.audioCtx.destination, kind, this.audioCtx.currentTime + 0.02, character);
+      const ctx = this.context();
+      if (!ctx) return;
+      if (ctx.state === 'suspended') ctx.resume();
+      this.sample(character).then((buffer) => {
+        try {
+          if (!buffer) {
+            scheduleMeow(ctx, ctx.destination, kind, ctx.currentTime + 0.02, character);
+            return;
+          }
+          const source = ctx.createBufferSource();
+          const gain = ctx.createGain();
+          source.buffer = buffer;
+          gain.gain.value = SAMPLE_LEVEL[kind] || 1;
+          source.connect(gain);
+          gain.connect(ctx.destination);
+          source.start();
+        } catch (e) { /* audio unavailable */ }
+      });
     } catch (e) { /* audio unavailable */ }
   }
 }
