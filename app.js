@@ -631,7 +631,18 @@ function buildMatrixChip(task) {
     moveToQuadrant(task.id, Number(e.key) || null, true);
   });
 
-  li.append(check, body);
+  const editBtn = document.createElement('button');
+  editBtn.type = 'button';
+  editBtn.className = 'matrix-chip-edit';
+  editBtn.setAttribute('aria-label', `Edit "${shown}"`);
+  editBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path></svg>';
+  editBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+  editBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    startTaskEdit(li, task);
+  });
+
+  li.append(check, body, editBtn);
   const href = firstTaskLink(task.text);
   if (href) {
     const link = document.createElement('a');
@@ -877,7 +888,7 @@ function deleteTask(id) {
 
 /** Swap a task's title for an input; Enter or leaving the field saves, Esc cancels. */
 function startTaskEdit(li, task) {
-  const textSpan = li.querySelector('.task-text');
+  const textSpan = li.querySelector('.task-text, .matrix-chip-body'); // list row or matrix chip
   if (!textSpan) return;
   const input = document.createElement('input');
   input.className = 'task-edit-input';

@@ -184,3 +184,10 @@ test('every character plays a recorded clip that the service worker precaches, w
     assert.ok(shellPaths().includes(`./sounds/${c}.mp3`), `${c}.mp3 precached`);
   });
 });
+
+test('matrix chips have an edit button that reuses the list editor', () => {
+  const app = read('app.js');
+  assert.match(app, /editBtn\.className = 'matrix-chip-edit'/);
+  assert.match(app, /querySelector\('\.task-text, \.matrix-chip-body'\)/);
+  assert.match(read('style.css'), /\.matrix-chip-edit\s*\{/);
+});
