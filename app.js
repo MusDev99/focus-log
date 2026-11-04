@@ -66,6 +66,11 @@ function updateClock() {
   updateTaskClocks();
 }
 
+/** Cheer for a finished task or a reached target (muted with the cat sounds setting). */
+function cheer() {
+  if (config.cat_sound) window.catSound.cheer();
+}
+
 function checkGoalReached(workMs) {
   if (workMs < config.daily_goal * 3600000) return;
   const day = window.PomodoroStore.localDayKey(new Date());
@@ -73,6 +78,7 @@ function checkGoalReached(workMs) {
   goalReachedDay = day;
   if (!goalPrimed) return;
   celebrate('big');
+  cheer();
   buzz([30, 60, 30]);
   showToast(`🎉 Daily work goal reached — ${hoursText(workMs / 60000)} today!`);
 }
@@ -822,6 +828,7 @@ function toggleTask(id, completed) {
   document.querySelectorAll(`#task-list [data-id="${CSS.escape(id)}"], #task-matrix [data-id="${CSS.escape(id)}"]`)
     .forEach(el => el.classList.add('just-completed'));
   const spent = (tasks.find(t => t.id === id) || {}).elapsed_ms || 0;
+  cheer();
   if (!task || (!task.points && !spent)) return;
 
   // Show the time spent and/or the new points total, celebrate crossing the daily target, offer an undo

@@ -133,6 +133,11 @@ test('ambient sound is gone; the cat meows when switching between work and break
   assert.match(audio, /cat: 'sounds\/meow\.mp3'/);
   assert.ok(fs.statSync(path.join(root, 'sounds/meow.mp3')).size > 1000, 'the meow file ships with the app');
   assert.ok(shellPaths().includes('./sounds/meow.mp3'), 'and is cached for offline use');
+  // the cheer plays when a task is done or a daily target is hit, under the same mute setting
+  assert.match(audio, /cheer: 'sounds\/yay\.mp3'/);
+  assert.match(app, /if \(config\.cat_sound\) window\.catSound\.cheer\(\)/);
+  assert.ok(fs.statSync(path.join(root, 'sounds/yay.mp3')).size > 1000, 'the cheer file ships with the app');
+  assert.ok(shellPaths().includes('./sounds/yay.mp3'), 'and is cached for offline use');
 });
 
 test('timer card has only Work and Break, a cat scene per mode, and the Overview tab', () => {

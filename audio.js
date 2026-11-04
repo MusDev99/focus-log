@@ -93,7 +93,7 @@ function scheduleMeow(ctx, destination, kind, start, character = 'cat') {
 
 // Recorded calls (short mp3s, precached by the service worker). The synthesised voices above are the
 // fallback if a clip fails to load or decode.
-const SAMPLE_FILES = { cat: 'sounds/meow.mp3', dog: 'sounds/dog.mp3', cow: 'sounds/cow.mp3', pig: 'sounds/pig.mp3' };
+const SAMPLE_FILES = { cat: 'sounds/meow.mp3', dog: 'sounds/dog.mp3', cow: 'sounds/cow.mp3', pig: 'sounds/pig.mp3', cheer: 'sounds/yay.mp3' };
 const SAMPLE_LEVEL = { work: 1, break: 0.7 }; // a break call is quieter
 
 class CatSound {
@@ -154,6 +154,24 @@ class CatSound {
     } catch (e) { /* audio unavailable */ }
   }
 }
+
+/** Cheer for a finished task or a reached daily target (the same clip whichever character is chosen). */
+CatSound.prototype.cheer = function cheer() {
+  try {
+    const ctx = this.context();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') ctx.resume();
+    this.sample('cheer').then((buffer) => {
+      try {
+        if (!buffer) return;
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start();
+      } catch (e) { /* audio unavailable */ }
+    });
+  } catch (e) { /* audio unavailable */ }
+};
 
 window.catSound = new CatSound();
 window.scheduleMeow = scheduleMeow;
