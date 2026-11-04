@@ -7,6 +7,7 @@ const SHELL = [
   './style.css',
   './app.js',
   './audio.js',
+  './sounds/meow.mp3',
   './timer-core.js',
   './store.js',
   './manifest.webmanifest',

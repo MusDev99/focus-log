@@ -103,7 +103,7 @@ function afterModeChange() {
   const before = workMode;
   workMode = store.getWorkState().mode;
   // The cat announces a switch to work or to a break (not a stop, and not a task change within work)
-  if (workMode !== before && workMode !== 'idle' && config.cat_sound) window.catSound.meow(workMode);
+  if (workMode !== before && workMode !== 'idle' && config.cat_sound) window.catSound.meow();
   applyWorkUi();
   saveActiveTask();
   fetchTasks();
