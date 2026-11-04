@@ -8,8 +8,10 @@ let config = {
   daily_goal: 4, // hours of work per day
   daily_points_goal: 10,
   cat_sound: 1,
+  character: 'cat',
   theme: 'light'
 };
+const CHARACTERS = ['cat', 'dog', 'cow', 'pig'];
 
 let workMode = 'idle'; // 'work' | 'break' | 'idle', mirrors store.getWorkState()
 let activeTaskId = null;
@@ -75,7 +77,30 @@ function checkGoalReached(workMs) {
   showToast(`🎉 Daily work goal reached — ${hoursText(workMs / 60000)} today!`);
 }
 
-/** Cat, tabs, button and theme follow the mode. */
+/** Show the chosen character (cat, dog, cow or pig) on the stage. */
+function applyCharacter() {
+  catStageEl.setAttribute('data-char', config.character);
+  catStageEl.setAttribute('aria-label', `Change character, now ${config.character}`);
+  if (config.cat_sound) window.catSound.preload(config.character);
+}
+
+/** Tapping the stage switches to the next character: cat → dog → cow → pig → cat. */
+function nextCharacter() {
+  const next = CHARACTERS[(CHARACTERS.indexOf(config.character) + 1) % CHARACTERS.length];
+  config = { ...config, ...store.saveSettings({ character: next }) };
+  applyCharacter();
+  settingCharacterInput.value = config.character;
+  if (config.cat_sound) window.catSound.meow(workMode === 'break' ? 'break' : 'work', config.character);
+}
+
+catStageEl.addEventListener('click', nextCharacter);
+catStageEl.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  e.preventDefault();
+  nextCharacter();
+});
+
+/** Character, tabs, button and theme follow the mode. */
 function applyWorkUi() {
   bodyEl.setAttribute('data-mode', workMode);
   catStageEl.setAttribute('data-mode', workMode);
@@ -103,7 +128,7 @@ function afterModeChange() {
   const before = workMode;
   workMode = store.getWorkState().mode;
   // The cat announces a switch to work or to a break (not a stop, and not a task change within work)
-  if (workMode !== before && workMode !== 'idle' && config.cat_sound) window.catSound.meow();
+  if (workMode !== before && workMode !== 'idle' && config.cat_sound) window.catSound.meow(workMode, config.character);
   applyWorkUi();
   saveActiveTask();
   fetchTasks();
@@ -1368,6 +1393,7 @@ const settingsForm = document.getElementById('settings-form');
 const settingGoalInput = document.getElementById('setting-goal');
 const settingPointsGoalInput = document.getElementById('setting-points-goal');
 const settingSoundInput = document.getElementById('setting-sound');
+const settingCharacterInput = document.getElementById('setting-character');
 
 let lastFocusedBeforeModal = null;
 
@@ -1413,11 +1439,13 @@ function fillSettingsForm() {
   settingGoalInput.value = config.daily_goal;
   settingPointsGoalInput.value = config.daily_points_goal;
   settingSoundInput.checked = Boolean(config.cat_sound);
+  settingCharacterInput.value = config.character;
 }
 
 function loadSettings() {
   config = { ...config, ...store.getSettings() };
   fillSettingsForm();
+  applyCharacter();
   applyTheme(config.theme);
   renderGoal();
 }
@@ -1427,11 +1455,13 @@ settingsForm.addEventListener('submit', (e) => {
   const updated = {
     daily_goal: parseInt(settingGoalInput.value, 10),
     daily_points_goal: parseInt(settingPointsGoalInput.value, 10),
-    cat_sound: settingSoundInput.checked ? 1 : 0
+    cat_sound: settingSoundInput.checked ? 1 : 0,
+    character: settingCharacterInput.value
   };
 
   config = { ...config, ...store.saveSettings(updated) };
   closeSettings();
+  applyCharacter();
   renderGoal();
   loadScore();
   updateClock();

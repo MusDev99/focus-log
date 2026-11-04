@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="description" content="Work and break clock with a cat, tasks and focus analytics.">
+  <meta name="description" content="Work and break clock with a cat, dog, cow or pig, tasks and focus analytics.">
   <meta name="theme-color" content="#f38ba0" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#2a2024" media="(prefers-color-scheme: dark)">
   <meta name="mobile-web-app-capable" content="yes">
@@ -185,18 +185,46 @@
           </nav>
 
           <!-- The cat follows the clock: typing at the desk while you work, sipping coffee on a break, napping when idle -->
-          <div id="cat-stage" class="cat-stage" data-mode="idle">
-            <svg viewBox="0 0 260 210" role="img" aria-label="A cat at a desk: working at a laptop, having a coffee break, or napping">
-              <path class="cat-tail" d="M170 150 C 208 150 216 112 192 98" />
+          <div id="cat-stage" class="cat-stage" data-mode="idle" data-char="cat" role="button" tabindex="0" aria-label="Change character, now cat">
+            <svg viewBox="0 0 260 210" aria-hidden="true">
+              <!-- Tails: one per character -->
+              <path class="cat-tail ch ch-cat" d="M170 150 C 208 150 216 112 192 98" />
+              <path class="cat-tail ch ch-dog" d="M172 146 C 198 146 206 124 198 106" />
+              <g class="cat-tail ch ch-cow"><path class="cow-tail" d="M172 150 C 194 148 202 132 198 114" /><ellipse class="cow-tuft" cx="198" cy="110" rx="6" ry="9" /></g>
+              <path class="cat-tail ch ch-pig" d="M172 152 q 24 -2 20 -18 q -4 -12 -16 -4 q -6 8 4 10" />
               <ellipse class="cat-fur" cx="120" cy="150" rx="56" ry="46" />
               <ellipse class="cat-belly" cx="120" cy="160" rx="32" ry="30" />
               <g class="cat-head">
-                <path class="cat-fur" d="M88 66 L83 32 L112 54 Z" />
-                <path class="cat-fur" d="M152 66 L157 32 L128 54 Z" />
-                <path class="cat-ear-in" d="M91 60 L89 43 L104 54 Z" />
-                <path class="cat-ear-in" d="M149 60 L151 43 L136 54 Z" />
+                <!-- Ears, horns (behind the head) -->
+                <g class="ch ch-cat">
+                  <path class="cat-fur" d="M88 66 L83 32 L112 54 Z" />
+                  <path class="cat-fur" d="M152 66 L157 32 L128 54 Z" />
+                  <path class="cat-ear-in" d="M91 60 L89 43 L104 54 Z" />
+                  <path class="cat-ear-in" d="M149 60 L151 43 L136 54 Z" />
+                </g>
+                <g class="ch ch-dog">
+                  <ellipse class="dog-ear" cx="84" cy="86" rx="14" ry="28" transform="rotate(14 84 86)" />
+                  <ellipse class="dog-ear" cx="156" cy="86" rx="14" ry="28" transform="rotate(-14 156 86)" />
+                </g>
+                <g class="ch ch-cow">
+                  <path class="cow-horn" d="M98 58 q-3 -16 -14 -18 q-2 10 6 22 z" />
+                  <path class="cow-horn" d="M142 58 q3 -16 14 -18 q2 10 -6 22 z" />
+                  <ellipse class="cat-fur" cx="80" cy="72" rx="17" ry="8" transform="rotate(-22 80 72)" />
+                  <ellipse class="cat-ear-in" cx="80" cy="72" rx="10" ry="4.5" transform="rotate(-22 80 72)" />
+                  <ellipse class="cat-fur" cx="160" cy="72" rx="17" ry="8" transform="rotate(22 160 72)" />
+                  <ellipse class="cat-ear-in" cx="160" cy="72" rx="10" ry="4.5" transform="rotate(22 160 72)" />
+                </g>
+                <g class="ch ch-pig">
+                  <path class="pig-ear" d="M90 64 L82 36 L112 52 Z" />
+                  <path class="pig-ear" d="M150 64 L158 36 L128 52 Z" />
+                </g>
                 <circle class="cat-fur" cx="120" cy="88" r="38" />
-                <path class="cat-stripe" d="M120 52 v10 M110 54 l2 8 M130 54 l-2 8" />
+                <!-- Markings on the face -->
+                <path class="cat-stripe ch ch-cat" d="M120 52 v10 M110 54 l2 8 M130 54 l-2 8" />
+                <g class="ch ch-cow">
+                  <ellipse class="cow-spot" cx="98" cy="68" rx="13" ry="9" />
+                  <ellipse class="cow-spot" cx="148" cy="70" rx="8" ry="7" />
+                </g>
                 <g class="eyes-open">
                   <circle class="cat-ink" cx="105" cy="90" r="5" /><circle class="cat-ink" cx="135" cy="90" r="5" />
                   <circle class="cat-shine" cx="107" cy="88" r="1.8" /><circle class="cat-shine" cx="137" cy="88" r="1.8" />
@@ -204,9 +232,27 @@
                 <path class="eyes-happy cat-line" d="M99 93 q6 -8 12 0 M129 93 q6 -8 12 0" />
                 <path class="eyes-sleep cat-line" d="M99 90 q6 6 12 0 M129 90 q6 6 12 0" />
                 <circle class="cat-blush" cx="94" cy="102" r="6" /><circle class="cat-blush" cx="146" cy="102" r="6" />
-                <path class="cat-nose" d="M116 99 h8 l-4 5 z" />
-                <path class="cat-line" d="M120 104 v3 M120 107 q-5 5 -10 1 M120 107 q5 5 10 1" />
-                <path class="cat-whisker" d="M92 100 l-24 -5 M92 105 l-24 5 M148 100 l24 -5 M148 105 l24 5" />
+                <!-- Nose, mouth and whiskers -->
+                <g class="ch ch-cat">
+                  <path class="cat-nose" d="M116 99 h8 l-4 5 z" />
+                  <path class="cat-line" d="M120 104 v3 M120 107 q-5 5 -10 1 M120 107 q5 5 10 1" />
+                  <path class="cat-whisker" d="M92 100 l-24 -5 M92 105 l-24 5 M148 100 l24 -5 M148 105 l24 5" />
+                </g>
+                <g class="ch ch-dog">
+                  <ellipse class="cat-belly" cx="120" cy="106" rx="17" ry="12" />
+                  <ellipse class="cat-ink" cx="120" cy="99" rx="7" ry="5" />
+                  <path class="cat-line" d="M120 104 v5 M120 109 q-5 5 -10 0 M120 109 q5 5 10 0" />
+                </g>
+                <g class="ch ch-cow">
+                  <ellipse class="snout" cx="120" cy="106" rx="22" ry="13" />
+                  <ellipse class="cat-ink" cx="111" cy="105" rx="2.6" ry="3.6" /><ellipse class="cat-ink" cx="129" cy="105" rx="2.6" ry="3.6" />
+                  <path class="cat-line" d="M110 114 q10 5 20 0" />
+                </g>
+                <g class="ch ch-pig">
+                  <ellipse class="snout" cx="120" cy="103" rx="17" ry="12" />
+                  <ellipse class="cat-ink" cx="113" cy="103" rx="2.6" ry="4.2" /><ellipse class="cat-ink" cx="127" cy="103" rx="2.6" ry="4.2" />
+                  <path class="cat-line" d="M112 116 q8 4 16 0" />
+                </g>
               </g>
 
               <g class="prop-work">
@@ -425,7 +471,16 @@
           <input id="setting-goal" type="number" min="1" max="24" value="4" required>
         </div>
         <div class="setting-item">
-          <label for="setting-sound">Cat sounds on work / break</label>
+          <label for="setting-character">Character</label>
+          <select id="setting-character">
+            <option value="cat">🐱 Cat</option>
+            <option value="dog">🐶 Dog</option>
+            <option value="cow">🐮 Cow</option>
+            <option value="pig">🐷 Pig</option>
+          </select>
+        </div>
+        <div class="setting-item">
+          <label for="setting-sound">Character sounds on work / break</label>
           <input id="setting-sound" class="setting-toggle" type="checkbox">
         </div>
         <div class="setting-item">
