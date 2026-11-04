@@ -541,3 +541,10 @@ test('cat sounds are a setting that defaults to on', () => {
   assert.equal(store.saveSettings({ cat_sound: 0 }).cat_sound, 0);
   assert.equal(store.saveSettings({ cat_sound: 5 }).cat_sound, 0, 'invalid values are ignored');
 });
+
+test('character is a setting: cat by default, dog / cow / pig accepted, anything else ignored', () => {
+  const { store } = makeStore();
+  assert.equal(store.getSettings().character, 'cat');
+  ['dog', 'cow', 'pig', 'cat'].forEach((c) => assert.equal(store.saveSettings({ character: c }).character, c));
+  assert.equal(store.saveSettings({ character: 'dragon' }).character, 'cat', 'invalid values are ignored');
+});

@@ -126,15 +126,15 @@ test('ambient sound is gone; the cat meows when switching between work and break
   assert.doesNotMatch(html, /ambient|sound-chip|sound-presets/);
   assert.match(html, /<input id="setting-sound" class="setting-toggle" type="checkbox">/);
   const app = read('app.js');
-  assert.match(app, /config\.cat_sound\) window\.catSound\.meow\(\)/);
+  assert.match(app, /config\.cat_sound\) window\.catSound\.meow\(workMode, config\.character\)/);
   assert.doesNotMatch(app, /ambientSound/);
   const audio = read('audio.js');
   assert.match(audio, /window\.catSound = new CatSound\(\)/);
-  assert.match(audio, /new Audio\('sounds\/meow\.mp3'\)/);
+  assert.match(audio, /cat: 'sounds\/meow\.mp3'/);
   assert.ok(fs.statSync(path.join(root, 'sounds/meow.mp3')).size > 1000, 'the meow file ships with the app');
   assert.ok(shellPaths().includes('./sounds/meow.mp3'), 'and is cached for offline use');
   // the cheer plays when a task is done or a daily target is hit, under the same mute setting
-  assert.match(audio, /new Audio\('sounds\/yay\.mp3'\)/);
+  assert.match(audio, /cheer: 'sounds\/yay\.mp3'/);
   assert.match(app, /if \(config\.cat_sound\) window\.catSound\.cheer\(\)/);
   assert.ok(fs.statSync(path.join(root, 'sounds/yay.mp3')).size > 1000, 'the cheer file ships with the app');
   assert.ok(shellPaths().includes('./sounds/yay.mp3'), 'and is cached for offline use');
@@ -143,7 +143,7 @@ test('ambient sound is gone; the cat meows when switching between work and break
 test('timer card has only Work and Break, a cat scene per mode, and the Overview tab', () => {
   const html = read('index.html');
   assert.deepEqual([...html.matchAll(/class="tab-btn[^"]*" data-mode="(\w+)"/g)].map((m) => m[1]), ['work', 'break']);
-  assert.match(html, /<div id="cat-stage" class="cat-stage" data-mode="idle">/);
+  assert.match(html, /<div id="cat-stage" class="cat-stage" data-mode="idle" data-char="cat"/);
   ['prop-work', 'prop-break', 'prop-idle'].forEach((c) => assert.ok(html.includes(`class="${c}"`), `${c} scene`));
   assert.match(html, /<span id="nav-timer-label">Overview<\/span>/);
   assert.doesNotMatch(html, /Short Break|Long Break|setting-focus|setting-autostart/);
@@ -157,4 +157,30 @@ test('finished tasks get a Done bucket with Restore', () => {
   assert.match(html, /class="panel-card done-card"/);
   assert.match(html, /id="done-list"/);
   assert.match(read('app.js'), /restore\.addEventListener\('click', \(\) => toggleTask\(task\.id, false\)\)/);
+});
+
+test('the character (cat, dog, cow, pig) is drawn, voiced, saved as a setting and cycles on tap', () => {
+  const html = read('index.html');
+  const css = read('style.css');
+  ['cat', 'dog', 'cow', 'pig'].forEach((c) => {
+    assert.ok(html.includes(`ch ch-${c}`), `${c} drawing`);
+    assert.ok(css.includes(`.cat-stage[data-char="${c}"]`), `${c} colours`);
+    assert.ok(html.includes(`<option value="${c}">`), `${c} in settings`);
+  });
+  const audio = read('audio.js');
+  ['cat', 'dog', 'cow', 'pig'].forEach((c) => assert.ok(new RegExp(`\\b${c}:`).test(audio), `${c} voice`));
+  const app = read('app.js');
+  assert.match(app, /CHARACTERS\[\(CHARACTERS\.indexOf\(config\.character\) \+ 1\) % CHARACTERS\.length\]/);
+  assert.match(app, /catStageEl\.addEventListener\('click', nextCharacter\)/);
+});
+
+test('every character plays a recorded clip that the service worker precaches, with the synthesised voice as fallback', () => {
+  const audio = read('audio.js');
+  assert.ok(audio.includes("cat: 'sounds/meow.mp3'"), 'cat clip wired');
+  assert.ok(shellPaths().includes('./sounds/meow.mp3'), 'meow.mp3 precached');
+  ['dog', 'cow', 'pig'].forEach((c) => {
+    assert.ok(audio.includes(`${c}: 'sounds/${c}.mp3'`), `${c} clip wired`);
+    assert.ok(fs.existsSync(path.join(root, 'sounds', `${c}.mp3`)), `${c}.mp3 exists`);
+    assert.ok(shellPaths().includes(`./sounds/${c}.mp3`), `${c}.mp3 precached`);
+  });
 });
