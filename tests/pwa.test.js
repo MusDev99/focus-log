@@ -126,9 +126,13 @@ test('ambient sound is gone; the cat meows when switching between work and break
   assert.doesNotMatch(html, /ambient|sound-chip|sound-presets/);
   assert.match(html, /<input id="setting-sound" class="setting-toggle" type="checkbox">/);
   const app = read('app.js');
-  assert.match(app, /config\.cat_sound\) window\.catSound\.meow\(workMode\)/);
+  assert.match(app, /config\.cat_sound\) window\.catSound\.meow\(\)/);
   assert.doesNotMatch(app, /ambientSound/);
-  assert.match(read('audio.js'), /window\.catSound = new CatSound\(\)/);
+  const audio = read('audio.js');
+  assert.match(audio, /window\.catSound = new CatSound\(\)/);
+  assert.match(audio, /new Audio\('sounds\/meow\.mp3'\)/);
+  assert.ok(fs.statSync(path.join(root, 'sounds/meow.mp3')).size > 1000, 'the meow file ships with the app');
+  assert.ok(shellPaths().includes('./sounds/meow.mp3'), 'and is cached for offline use');
 });
 
 test('timer card has only Work and Break, a cat scene per mode, and the Overview tab', () => {
