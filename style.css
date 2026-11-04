@@ -281,17 +281,35 @@ body {
   height: auto;
 }
 
-.cat-fur { fill: #f0a35e; }
-.cat-belly { fill: #fbd9ae; }
-.cat-ear-in { fill: #f6b8b0; }
-.cat-stripe { fill: none; stroke: #d9843a; stroke-width: 3; stroke-linecap: round; }
+.cat-stage { --fur: #f0a35e; --belly: #fbd9ae; --ear-in: #f6b8b0; --mark: #d9843a; --snout: #f3b8b8; }
+.cat-stage[data-char="dog"] { --fur: #d9a066; --belly: #f3dcb8; }
+.cat-stage[data-char="cow"] { --fur: #f6f2ea; --belly: #ece5d8; --ear-in: #f3b8b8; }
+.cat-stage[data-char="pig"] { --fur: #f6aebe; --belly: #fbd0da; --snout: #f08a9c; }
+.cat-stage { cursor: pointer; }
+.cat-stage:focus-visible { outline: 3px solid var(--theme-accent); outline-offset: 3px; }
+.cat-fur { fill: var(--fur); }
+.cat-belly { fill: var(--belly); }
+.cat-ear-in { fill: var(--ear-in); }
+.dog-ear { fill: #8b5a2b; }
+.cow-horn { fill: #efe3c2; stroke: #cdbb8c; stroke-width: 1.5; }
+.cow-spot { fill: #2d2a32; }
+.cow-tail { fill: none; stroke: #cdbfa8; stroke-width: 6; stroke-linecap: round; }
+.cow-tuft { fill: #2d2a32; stroke: none; }
+.cat-stage[data-char="cow"] .cat-fur { stroke: #d8cfbd; stroke-width: 1.5; }
+.cat-tail.ch-pig { stroke-width: 6; }
+.pig-ear { fill: #f08a9c; stroke-linejoin: round; }
+.snout { fill: var(--snout); }
+.ch { display: none; }
+.cat-stage[data-char="cat"] .ch-cat, .cat-stage[data-char="dog"] .ch-dog,
+.cat-stage[data-char="cow"] .ch-cow, .cat-stage[data-char="pig"] .ch-pig { display: inline; }
+.cat-stripe { fill: none; stroke: var(--mark); stroke-width: 3; stroke-linecap: round; }
 .cat-ink { fill: #2d2a32; }
 .cat-shine { fill: #fff; }
 .cat-line { fill: none; stroke: #2d2a32; stroke-width: 2.6; stroke-linecap: round; }
 .cat-nose { fill: #e58a8a; }
 .cat-blush { fill: #f59aa5; opacity: 0.55; }
 .cat-whisker { fill: none; stroke: #8a7a6a; stroke-width: 1.6; stroke-linecap: round; opacity: 0.75; }
-.cat-tail { fill: none; stroke: #f0a35e; stroke-width: 15; stroke-linecap: round; transform-origin: 170px 150px; }
+.cat-tail { fill: none; stroke: var(--fur); stroke-width: 15; stroke-linecap: round; transform-origin: 170px 150px; }
 .cat-desk { fill: #b98b5e; }
 .cat-desk-leg { fill: #9c7249; }
 .laptop-lid { fill: #cfd5e3; stroke: #aab3c8; stroke-width: 2; }
@@ -1209,6 +1227,18 @@ button.heat-cell:hover { transform: scale(1.25); }
   background: var(--theme-accent);
   border-radius: 999px;
   transition: width 0.4s ease;
+}
+
+.setting-item select {
+  background: var(--surface-muted);
+  border: 1px solid #dbe1ea;
+  border-radius: 10px;
+  padding: 8px 10px;
+  min-height: 40px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-main);
 }
 
 .setting-item input.setting-toggle {

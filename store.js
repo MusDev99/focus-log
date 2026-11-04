@@ -26,6 +26,7 @@
     daily_goal: 4,
     daily_points_goal: 10,
     cat_sound: 1,
+    character: 'cat',
     theme: 'light',
   };
 
@@ -39,6 +40,7 @@
     daily_goal: [1, 24],
     daily_points_goal: [1, 500],
     cat_sound: [0, 1],
+    character: ['cat', 'dog', 'cow', 'pig'],
     theme: ['light', 'dark'],
   };
 

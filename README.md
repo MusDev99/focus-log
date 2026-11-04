@@ -14,6 +14,7 @@ You can also just open `index.html` directly in a browser.
 |---|---|
 | ⏱ Timer | wall-clock based (no drift), survives reload, auto-advance, optional auto-start |
 | 🔔 Alerts | end-of-session chime + notification via the service worker (works on Android); tap it to return to the app |
+| 🐱🐶🐮🐷 Character | desk buddy follows the clock (types, sips coffee, naps) and speaks in its own voice; pick cat, dog, cow or pig in Preferences, or tap it to cycle cat → dog → cow → pig |
 | ⌨️ Shortcuts | `Space` start/pause · `R` reset · `1`/`2`/`3` modes |
 | 🎯 Daily goal | progress bar, configurable in settings |
 | 🌗 Dark mode | toggle in top bar, saved |
