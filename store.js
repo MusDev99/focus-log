@@ -232,8 +232,10 @@
       return Array.isArray(v) ? v : [];
     }
 
-    const rawTasks = () => readList(KEYS.tasks).map(dropEstimate);
-    const rawSessions = () => readList(KEYS.sessions);
+    // A stored entry that is not an object (hand-edited or corrupt data) is skipped here, so nothing downstream can trip over it.
+    const isRecord = (x) => x !== null && typeof x === 'object';
+    const rawTasks = () => readList(KEYS.tasks).filter(isRecord).map(dropEstimate);
+    const rawSessions = () => readList(KEYS.sessions).filter(isRecord);
     const focusSessions = () => rawSessions().filter((s) => s.mode === 'focus');
 
     function getSettings() {
@@ -548,6 +550,13 @@
       };
     }
 
+    /** Focus sessions as plain {task_id, completed_at, duration_seconds, mode}, for the developer views. Corrupt entries are skipped. */
+    function listFocusSessions() {
+      return focusSessions()
+        .filter((s) => s && Number.isFinite(s.duration_seconds) && !Number.isNaN(Date.parse(s.completed_at)))
+        .map((s) => ({ task_id: s.task_id == null ? null : String(s.task_id), completed_at: s.completed_at, duration_seconds: s.duration_seconds, mode: s.mode }));
+    }
+
     /** Focus time per task (top `limit` by minutes), including sessions with no/deleted task. */
     function taskStats(limit = TOP_TASKS_LIMIT) {
       const titles = {};
@@ -720,7 +729,7 @@
 
     return {
       getSettings, saveSettings, listTasks, addTask, updateTask, deleteTask, restoreTask, reorderTasks,
-      startTaskClock, pauseTaskClock, runningTaskId, taskElapsedMs, getWorkState, setWorkMode, todayTotals, resetToday, logSession, summary, pointsSummary, taskStats, heatmap, dayDetail, weeklyReview, sessionsCsv, exportBackup, importBackup,
+      listFocusSessions, startTaskClock, pauseTaskClock, runningTaskId, taskElapsedMs, getWorkState, setWorkMode, todayTotals, resetToday, logSession, summary, pointsSummary, taskStats, heatmap, dayDetail, weeklyReview, sessionsCsv, exportBackup, importBackup,
     };
   }
 

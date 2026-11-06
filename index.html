@@ -444,6 +444,32 @@
           <ul id="task-stats" class="task-stats"></ul>
           <div id="task-stats-empty" class="task-empty-state">Finish a focus session with a task selected.</div>
         </section>
+
+        <section class="panel-card dev-card" aria-label="Developer view">
+          <div class="card-header">
+            <h2 class="card-title">Developer view</h2>
+          </div>
+          <p id="wip-note" class="dev-note" role="status" hidden></p>
+
+          <div class="dev-block">
+            <div class="chart-header">
+              <span class="chart-title">Time by ticket or repo</span>
+              <span id="streams-sub" class="chart-subtitle">last 7 days</span>
+            </div>
+            <ul id="stream-list" class="task-stats"></ul>
+            <div id="stream-empty" class="task-empty-state">Paste a Jira or GitHub link into a task and time it: this shows how long each ticket and repo took.</div>
+          </div>
+
+          <div class="dev-block">
+            <div class="chart-header">
+              <span class="chart-title">Sizing check</span>
+              <span class="chart-subtitle">last 4 weeks</span>
+            </div>
+            <ul id="sizing-list" class="task-stats"></ul>
+            <p id="sizing-verdict" class="dev-note" hidden></p>
+            <div id="sizing-empty" class="task-empty-state">Finish a few scored tasks with at least 5 minutes on their clock to see how long each size really takes.</div>
+          </div>
+        </section>
       </aside>
     </main>
   </div>

@@ -23,6 +23,7 @@ You can also just open `index.html` directly in a browser.
 | 📊 Stats | local-time day buckets, streak, 7-day chart |
 | ✏️ Tasks | edit inline (pencil), reorder by dragging the handle or with ↑/↓ on it |
 | 🎯 Story points | optional points per task; the daily points goal and stats use them |
+| 🧑‍💻 Developer view | Stats card: focus time by Jira ticket or GitHub repo (from the first link in each task, last 7 days), a sizing check (average time per story-point size over 4 weeks, and whether bigger sizes really take longer), and a warning when 3 or more tasks are started but not finished |
 | 🗓 Heatmap | focus minutes per day for the last 12 weeks |
 | 📈 Focus by task | top tasks by focus time |
 | 📅 Weekly review | last 7 days vs the 7 before, best day, top task, longest streak |
