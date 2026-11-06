@@ -77,3 +77,55 @@ test('formatElapsed shows m:ss, and h:mm:ss from one hour', () => {
   assert.equal(T.formatElapsed(3725999), '1:02:05');
   assert.equal(T.formatElapsed(-5), '0:00');
 });
+
+// ---- row swipe rules ----
+
+const BOTH = { left: true, right: true };
+const LEFT_ONLY = { left: true, right: false };
+
+test('lockAxis waits for 8 px, then splits scroll from swipe; a diagonal stays a scroll', () => {
+  assert.equal(T.lockAxis(3, 4), null);
+  assert.equal(T.lockAxis(12, 3), 'x');
+  assert.equal(T.lockAxis(-12, 3), 'x');
+  assert.equal(T.lockAxis(4, 12), 'y');
+  assert.equal(T.lockAxis(10, 9), 'y');
+});
+
+test('swipeThreshold is 30% of the row within 72-160 px', () => {
+  assert.equal(T.swipeThreshold(200), 72);
+  assert.equal(T.swipeThreshold(375), 112.5);
+  assert.equal(T.swipeThreshold(1000), 160);
+});
+
+test('swipePull follows the finger to the threshold, then at 35%, and never past 60% of the row', () => {
+  const t = T.swipeThreshold(375);
+  assert.equal(T.swipePull(50, 375, BOTH), 50);
+  assert.equal(T.swipePull(-50, 375, BOTH), -50);
+  assert.equal(T.swipePull(t + 100, 375, BOTH), t + 35);
+  assert.equal(T.swipePull(0, 375, BOTH), 0);
+  assert.equal(T.swipePull(5000, 100, BOTH), 60);
+});
+
+test('a direction with no action resists and stops at 24 px', () => {
+  assert.equal(T.swipePull(100, 375, LEFT_ONLY), 15);
+  assert.equal(T.swipePull(1000, 375, LEFT_ONLY), 24);
+});
+
+test('swipeArmed only past the threshold and only for an allowed direction', () => {
+  assert.equal(T.swipeArmed(50, 375, BOTH), false);
+  assert.equal(T.swipeArmed(120, 375, BOTH), true);
+  assert.equal(T.swipeArmed(-120, 375, BOTH), true);
+  assert.equal(T.swipeArmed(120, 375, LEFT_ONLY), false);
+});
+
+test('swipeCommit: past the threshold acts, a short swipe springs back, a quick flick acts early', () => {
+  assert.equal(T.swipeCommit(130, 375, 0, BOTH), 'right');
+  assert.equal(T.swipeCommit(-130, 375, 0, BOTH), 'left');
+  assert.equal(T.swipeCommit(60, 375, 0.1, BOTH), null);
+  assert.equal(T.swipeCommit(60, 375, 0.9, BOTH), 'right');
+  assert.equal(T.swipeCommit(-60, 375, -0.9, BOTH), 'left');
+  assert.equal(T.swipeCommit(20, 375, 0.9, BOTH), null, 'a tiny move is never a flick');
+  assert.equal(T.swipeCommit(60, 375, -0.9, BOTH), null, 'a flick against the direction does not count');
+  assert.equal(T.swipeCommit(300, 375, 2, LEFT_ONLY), null, 'a dead direction never acts');
+  assert.equal(T.swipeCommit(0, 375, 2, BOTH), null);
+});

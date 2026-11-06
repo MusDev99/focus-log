@@ -448,6 +448,23 @@
     </main>
   </div>
 
+  <!-- Task actions: one bottom sheet for every row (a native dialog: focus is trapped, Esc closes) -->
+  <dialog id="task-sheet" class="task-sheet" aria-labelledby="task-sheet-title">
+    <div class="sheet-grabber" aria-hidden="true"></div>
+    <div class="sheet-head">
+      <h3 id="task-sheet-title" class="sheet-title"></h3>
+      <button id="task-sheet-close" class="modal-close-btn" type="button" aria-label="Close">&times;</button>
+    </div>
+    <p class="sheet-label">Move to</p>
+    <div id="sheet-quadrants" class="sheet-chips"></div>
+    <p class="sheet-label">Story points</p>
+    <div id="sheet-points" class="sheet-chips"></div>
+    <div class="sheet-actions">
+      <button id="sheet-edit" class="sheet-action" type="button">Edit text</button>
+      <button id="sheet-delete" class="sheet-action sheet-danger" type="button">Delete task</button>
+    </div>
+  </dialog>
+
   <!-- Settings Modal -->
   <div id="settings-modal" class="modal-backdrop" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="settings-title">

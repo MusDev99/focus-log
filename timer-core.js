@@ -96,8 +96,50 @@
     return link ? link.href : null;
   }
 
+  // ---- Row swipe rules: when a touch is a swipe, how far the row follows, when letting go acts ----
+  // Right = finish, left = more actions. A direction with no action resists instead of moving.
+
+  /** Finger travel (px) before a touch is classed as a swipe or a scroll. */
+  const SWIPE_LOCK_PX = 8;
+
+  /** 'x' (a swipe), 'y' (a scroll, never ours) or null until the finger has moved SWIPE_LOCK_PX. A diagonal stays a scroll. */
+  function lockAxis(dx, dy) {
+    if (Math.hypot(dx, dy) < SWIPE_LOCK_PX) return null;
+    return Math.abs(dx) > Math.abs(dy) * 1.2 ? 'x' : 'y';
+  }
+
+  /** How far a swipe must travel to count: 30% of the row, between 72 and 160 px. */
+  const swipeThreshold = (width) => Math.max(72, Math.min(160, width * 0.3));
+
+  /** Where the row sits for a finger `dx` from where it landed: 1:1 to the threshold, 35% beyond; a dead direction barely moves. */
+  function swipePull(dx, width, allow) {
+    if (dx === 0) return 0;
+    const dir = dx < 0 ? 'left' : 'right';
+    const d = Math.abs(dx);
+    if (!allow[dir]) return Math.sign(dx) * Math.min(24, d * 0.15);
+    const t = swipeThreshold(width);
+    const shown = d <= t ? d : t + (d - t) * 0.35;
+    return Math.sign(dx) * Math.min(shown, width * 0.6);
+  }
+
+  /** True once the finger is past the point where letting go would act (drives the tick and the highlight). */
+  function swipeArmed(dx, width, allow) {
+    const dir = dx < 0 ? 'left' : 'right';
+    return dx !== 0 && allow[dir] && Math.abs(dx) >= swipeThreshold(width);
+  }
+
+  /** On release: 'left' / 'right' past the threshold or on a quick flick (px/ms) of at least 40 px the same way; else null. */
+  function swipeCommit(dx, width, velocity, allow) {
+    if (dx === 0) return null;
+    const dir = dx < 0 ? 'left' : 'right';
+    if (!allow[dir]) return null;
+    const flick = Math.abs(velocity) > 0.6 && Math.sign(velocity) === Math.sign(dx) && Math.abs(dx) >= 40;
+    return Math.abs(dx) >= swipeThreshold(width) || flick ? dir : null;
+  }
+
   return {
     heatLevel, heatmapCells, formatElapsed, shortUrl, taskTextParts, taskDisplayText, firstTaskLink,
     goalProgress, shortcutAction,
+    lockAxis, swipeThreshold, swipePull, swipeArmed, swipeCommit,
   };
 });
