@@ -1276,6 +1276,49 @@ button.heat-cell:hover { transform: scale(1.25); }
   background: var(--theme-accent);
 }
 
+/* Developer view: time by ticket or repo, sizing check */
+.dev-block + .dev-block {
+  margin-top: 20px;
+}
+
+.dev-note {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border-left: 3px solid var(--theme-accent);
+  background: var(--theme-accent-light);
+  color: var(--text-main);
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.dev-note[hidden] {
+  display: none;
+}
+
+.dev-block .dev-note {
+  margin: 12px 0 0;
+}
+
+.task-stat-row .task-stat-name a {
+  display: inline-block;
+  max-width: 100%;
+  min-height: 24px;
+}
+
+.task-stat-row.muted {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+/* Phones: a ticket or repo name gets the whole line, its details sit underneath */
+@media (max-width: 600px) {
+  .task-stat-row.stream-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Daily goal */
 .goal-container {
   margin-bottom: 16px;
@@ -1604,7 +1647,8 @@ button.heat-cell:hover { transform: scale(1.25); }
   /* Timer tab = the focus desk: tasks | timer | today's score and focus.
      Weekly review and insights live in the Stats tab. */
   body[data-view="timer"] .review-card,
-  body[data-view="timer"] .insights-card {
+  body[data-view="timer"] .insights-card,
+  body[data-view="timer"] .dev-card {
     display: none;
   }
 
@@ -1749,6 +1793,24 @@ button.heat-cell:hover { transform: scale(1.25); }
   body[data-view="stats"] .insights-card > .task-stats,
   body[data-view="stats"] .insights-card > #task-stats-empty {
     grid-row: 3 / span 2;
+  }
+
+  /* Developer view runs full width: time by ticket on the left, sizing check beside it */
+  body[data-view="stats"] .dev-card {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 32px;
+    align-items: start;
+  }
+
+  body[data-view="stats"] .dev-card > .card-header,
+  body[data-view="stats"] .dev-card > .dev-note {
+    grid-column: 1 / -1;
+  }
+
+  body[data-view="stats"] .dev-block + .dev-block {
+    margin-top: 0;
   }
 }
 

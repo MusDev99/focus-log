@@ -116,9 +116,21 @@ test('story points: picker on the task form, score card and a daily target setti
   assert.match(app, /daily_points_goal: parseInt\(settingPointsGoalInput\.value, 10\)/);
 });
 
-test('the desktop timer tab leaves review and insights to Stats', () => {
+test('the desktop timer tab leaves review, insights and the developer view to Stats', () => {
   const css = read('style.css');
-  assert.match(css, /body\[data-view="timer"\] \.review-card,\s*body\[data-view="timer"\] \.insights-card \{\s*display: none;/);
+  assert.match(css, /body\[data-view="timer"\] \.review-card,\s*body\[data-view="timer"\] \.insights-card,\s*body\[data-view="timer"\] \.dev-card \{\s*display: none;/);
+});
+
+test('the developer view is built with textContent and safe links, never innerHTML for user text', () => {
+  const app = read('app.js');
+  const body = app.slice(app.indexOf('function renderDevMetrics'), app.indexOf('function loadInsights'));
+  assert.match(body, /link\.rel = 'noopener noreferrer'/);
+  assert.match(body, /link\.target = '_blank'/);
+  assert.doesNotMatch(body.replace(/\.innerHTML = ''/g, ''), /innerHTML/);
+  const html = read('index.html');
+  assert.match(html, /id="stream-list"/);
+  assert.match(html, /id="sizing-list"/);
+  assert.match(html, /id="wip-note"/);
 });
 
 test('ambient sound is gone; the cat meows when switching between work and break, unless muted in settings', () => {
