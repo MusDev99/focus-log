@@ -50,12 +50,6 @@
     return Array(firstDow).fill(null).concat(days);
   }
 
-  /** "2/4 🍅" style progress text; "3 🍅" when there is no estimate. */
-  function estimateLabel(actual, estimate) {
-    if (!estimate) return actual > 0 ? `${actual} 🍅` : '';
-    return `${actual}/${estimate} 🍅`;
-  }
-
   // http(s) links, or www. ones; trailing punctuation belongs to the sentence, not the link
   const URL_RE = /\b(?:https?:\/\/|www\.)[^\s<>"']+/gi;
   const TRAILING_RE = /[.,;:!?)\]}'"]+$/;
@@ -103,7 +97,7 @@
   }
 
   return {
-    heatLevel, heatmapCells, estimateLabel, formatElapsed, shortUrl, taskTextParts, taskDisplayText, firstTaskLink,
+    heatLevel, heatmapCells, formatElapsed, shortUrl, taskTextParts, taskDisplayText, firstTaskLink,
     goalProgress, shortcutAction,
   };
 });

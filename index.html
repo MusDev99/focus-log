@@ -9,18 +9,18 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="Pomodoro">
+  <meta name="apple-mobile-web-app-title" content="Focus Log">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <title>Focus Dashboard - Pomodoro</title>
+  <title>Focus Log</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <script>
     // Apply saved theme before first paint to avoid a light flash
-    try { document.documentElement.setAttribute('data-theme', localStorage.getItem('pomodoro-theme') || 'light'); } catch (e) {}
+    try { document.documentElement.setAttribute('data-theme', localStorage.getItem('focuslog-theme') || localStorage.getItem('pomodoro-theme') || 'light'); } catch (e) {}
   </script>
 </head>
 <body data-mode="idle" data-view="timer">
@@ -29,7 +29,7 @@
     <header class="dashboard-topbar">
       <div class="brand-group">
         <span class="app-tag">Focus Sanctuary</span>
-        <h1 class="brand-title">Pomodoro Dashboard</h1>
+        <h1 class="brand-title">Focus Log</h1>
       </div>
       <!-- Section tabs: fixed at the bottom on phones, in the header from 720px up -->
       <nav class="bottom-nav" aria-label="Sections">
@@ -94,16 +94,6 @@
               maxlength="200" 
               autocomplete="off"
               required
-            />
-            <input
-              id="task-estimate"
-              class="task-estimate"
-              type="number"
-              min="0"
-              max="20"
-              placeholder="🍅"
-              title="Estimated pomodoros"
-              aria-label="Estimated pomodoros"
             />
             <select id="task-points" class="task-points" title="Story points (optional)" aria-label="Story points (optional)">
               <option value="0">SP</option>

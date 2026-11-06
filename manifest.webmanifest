@@ -1,7 +1,7 @@
 {
-  "name": "Pomodoro Focus Dashboard",
-  "short_name": "Pomodoro",
-  "description": "Focus timer, tasks, ambient sound and focus analytics.",
+  "name": "Focus Log",
+  "short_name": "Focus Log",
+  "description": "A work and break clock, tasks on a priority matrix, story points and focus analytics. Everything stays in your browser.",
   "id": "./",
   "start_url": "./",
   "scope": "./",

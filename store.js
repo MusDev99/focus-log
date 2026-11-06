@@ -4,14 +4,28 @@
   if (typeof module === 'object' && module.exports) {
     module.exports = factory();
   } else {
-    root.PomodoroStore = factory();
+    root.FocusLogStore = factory();
   }
 })(typeof self !== 'undefined' ? self : this, function () {
-  const KEYS = { tasks: 'pomodoro-tasks', sessions: 'pomodoro-sessions', settings: 'pomodoro-settings', clock: 'pomodoro-task-clock', work: 'pomodoro-work-state' };
+  const KEYS = { tasks: 'focuslog-tasks', sessions: 'focuslog-sessions', settings: 'focuslog-settings', clock: 'focuslog-task-clock', work: 'focuslog-work-state' };
+  /** The app's small UI preferences (raw strings, written by app.js and the page's theme script). */
+  const UI_KEYS = { theme: 'focuslog-theme', activeTask: 'focuslog-active-task', taskView: 'focuslog-task-view', view: 'focuslog-view' };
+  /** What every key was called before the app was renamed (it used to be a Pomodoro timer). */
+  const LEGACY_KEYS = {
+    'pomodoro-tasks': KEYS.tasks,
+    'pomodoro-sessions': KEYS.sessions,
+    'pomodoro-settings': KEYS.settings,
+    'pomodoro-task-clock': KEYS.clock,
+    'pomodoro-work-state': KEYS.work,
+    'pomodoro-theme': UI_KEYS.theme,
+    'pomodoro-active-task': UI_KEYS.activeTask,
+    'pomodoro-task-view': UI_KEYS.taskView,
+    'pomodoro-view': UI_KEYS.view,
+  };
+  /** Set once the old data has been carried over, so deleting data later never brings the old copy back. */
+  const MIGRATED_KEY = 'focuslog-migrated';
   const MAX_TASK_LENGTH = 200; // room for a link
-  const MAX_ESTIMATE = 20;
   const MAX_POINTS = 100;
-  const POMODORO_SECONDS = 25 * 60; // one 🍅 of an estimate = 25 minutes of work
   const MAX_ELAPSED_MS = 1000 * 24 * 60 * 60 * 1000;
   const MAX_SESSION_SECONDS = 24 * 60 * 60;
   const TOP_TASKS_LIMIT = 10;
@@ -43,6 +57,30 @@
     character: ['cat', 'dog', 'cow', 'pig'],
     theme: ['light', 'dark'],
   };
+
+  /**
+   * Carry the data saved under the old `pomodoro-*` names over to the new ones, once. Only keys that are still
+   * empty under the new name are filled, and the old keys are never touched: they stay as a backup.
+   * Returns how many keys were copied. Never throws (storage may be blocked or full).
+   */
+  function migrateLegacyKeys(storage) {
+    try {
+      if (storage.getItem(MIGRATED_KEY) !== null) return 0;
+      let copied = 0;
+      Object.keys(LEGACY_KEYS).forEach((oldKey) => {
+        const value = storage.getItem(oldKey);
+        const newKey = LEGACY_KEYS[oldKey];
+        if (value !== null && storage.getItem(newKey) === null) {
+          storage.setItem(newKey, value);
+          copied++;
+        }
+      });
+      if (copied > 0) storage.setItem(MIGRATED_KEY, '1');
+      return copied;
+    } catch (e) {
+      return 0;
+    }
+  }
 
   /** 'YYYY-MM-DD' for a Date in local time. */
   function localDayKey(date) {
@@ -100,12 +138,19 @@
 
   const round1 = (n) => Math.round(n * 10) / 10;
 
-  const BACKUP_APP = 'pomodoro-focus-dashboard';
+  const BACKUP_APP = 'focus-log';
+  /** Backups made before the rename still import. */
+  const LEGACY_BACKUP_APPS = ['pomodoro-focus-dashboard'];
   const BACKUP_VERSION = 1;
 
   /** Eisenhower/Covey quadrant: 1 urgent+important, 2 important, 3 urgent, 4 neither; null = not sorted yet. */
   const cleanQuadrant = (q) => (Number.isInteger(q) && q >= 1 && q <= 4 ? q : null);
-  const clampEstimate = (n) => (Number.isInteger(n) ? Math.min(MAX_ESTIMATE, Math.max(0, n)) : 0);
+  /** Tasks saved by older versions carry a pomodoro `estimate`; it is dropped on read (story points replaced it). */
+  const dropEstimate = (t) => {
+    if (!t || typeof t !== 'object' || !('estimate' in t)) return t;
+    const { estimate, ...rest } = t;
+    return rest;
+  };
   /** Optional story points; 0 = not scored. */
   /** Time spent on a task, in ms (banked while its clock is stopped). */
   const cleanElapsed = (n) => (Number.isFinite(n) ? Math.min(MAX_ELAPSED_MS, Math.max(0, Math.round(n))) : 0);
@@ -122,7 +167,6 @@
       id: String(t.id),
       text: t.text.trim().slice(0, MAX_TASK_LENGTH),
       completed,
-      estimate: clampEstimate(t.estimate),
       quadrant: cleanQuadrant(t.quadrant),
       points: cleanPoints(t.points),
       elapsed_ms: cleanElapsed(t.elapsed_ms),
@@ -163,6 +207,7 @@
 
   function createStore(storage, now = () => new Date()) {
     let lastId = 0;
+    migrateLegacyKeys(storage);
 
     function read(key, fallback) {
       try {
@@ -187,7 +232,7 @@
       return Array.isArray(v) ? v : [];
     }
 
-    const rawTasks = () => readList(KEYS.tasks);
+    const rawTasks = () => readList(KEYS.tasks).map(dropEstimate);
     const rawSessions = () => readList(KEYS.sessions);
     const focusSessions = () => rawSessions().filter((s) => s.mode === 'focus');
 
@@ -334,28 +379,24 @@
       return sessions.length - kept.length;
     }
 
-    /** Tasks in creation order, each with `actual` = focus sessions logged against it. */
+    /** Tasks in creation order, each with its live clock (`running`, `elapsed_ms`). */
     function listTasks() {
-      const seconds = {};
-      focusSessions().forEach((s) => {
-        if (s.task_id != null) seconds[s.task_id] = (seconds[s.task_id] || 0) + s.duration_seconds;
-      });
       const clock = readClock();
       return rawTasks().map((t) => {
         const running = !!clock && clock.task_id === t.id && t.completed !== true;
         return {
           ...t, quadrant: cleanQuadrant(t.quadrant), points: cleanPoints(t.points),
-          completed_at: t.completed_at || null, actual: Math.floor((seconds[t.id] || 0) / POMODORO_SECONDS),
+          completed_at: t.completed_at || null,
           running, elapsed_ms: cleanElapsed((t.elapsed_ms || 0) + (running ? liveMs(clock) : 0)),
         };
       });
     }
 
-    function addTask(text, estimate = 0, quadrant = null, points = 0) {
+    function addTask(text, quadrant = null, points = 0) {
       const clean = typeof text === 'string' ? text.trim().slice(0, MAX_TASK_LENGTH) : '';
       if (!clean) return null;
       const task = {
-        id: newId(), text: clean, completed: false, estimate: clampEstimate(estimate), quadrant: cleanQuadrant(quadrant),
+        id: newId(), text: clean, completed: false, quadrant: cleanQuadrant(quadrant),
         points: cleanPoints(points), created_at: now().toISOString(), completed_at: null,
       };
       write(KEYS.tasks, rawTasks().concat(task));
@@ -379,7 +420,6 @@
           next.completed_at = fields.completed ? now().toISOString() : null;
         }
         if (typeof fields.text === 'string' && fields.text.trim()) next.text = fields.text.trim().slice(0, MAX_TASK_LENGTH);
-        if (Number.isInteger(fields.estimate)) next.estimate = Math.min(MAX_ESTIMATE, Math.max(0, fields.estimate));
         if ('quadrant' in fields) next.quadrant = cleanQuadrant(fields.quadrant);
         if ('points' in fields) next.points = cleanPoints(fields.points);
         return next;
@@ -437,8 +477,9 @@
      * Returns {tasks, sessions} = how many were added.
      */
     function importBackup(data) {
-      if (!data || typeof data !== 'object' || data.app !== BACKUP_APP || !Array.isArray(data.tasks) || !Array.isArray(data.sessions)) {
-        throw new Error('This file is not a Pomodoro backup.');
+      const known = data && (data.app === BACKUP_APP || LEGACY_BACKUP_APPS.includes(data.app));
+      if (!data || typeof data !== 'object' || !known || !Array.isArray(data.tasks) || !Array.isArray(data.sessions)) {
+        throw new Error('This file is not a Focus Log backup.');
       }
       if (!(data.version <= BACKUP_VERSION)) throw new Error('This backup was made by a newer version of the app.');
 
@@ -683,5 +724,5 @@
     };
   }
 
-  return { createStore, KEYS, DEFAULT_SETTINGS, localDayKey, computeStreak, longestStreak, csvSafe, cleanSettings };
+  return { createStore, KEYS, UI_KEYS, LEGACY_KEYS, migrateLegacyKeys, DEFAULT_SETTINGS, localDayKey, computeStreak, longestStreak, csvSafe, cleanSettings };
 });

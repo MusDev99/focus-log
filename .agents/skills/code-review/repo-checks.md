@@ -1,4 +1,4 @@
-# 🍅 Pomodoro repo checks
+# Focus Log repo checks
 
 Extra checks for this repo, on top of `SKILL.md`. Gate: `scripts/validate.sh`.
 

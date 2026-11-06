@@ -41,14 +41,6 @@ test('heatmapCells pads so the first date lands on its weekday row', () => {
   assert.deepEqual(T.heatmapCells([]), []);
 });
 
-test('estimateLabel shows actual/estimate, plain count, or nothing', () => {
-  assert.equal(T.estimateLabel(2, 4), '2/4 🍅');
-  assert.equal(T.estimateLabel(0, 3), '0/3 🍅');
-  assert.equal(T.estimateLabel(5, 0), '5 🍅');
-  assert.equal(T.estimateLabel(0, 0), '');
-  assert.equal(T.estimateLabel(5, 4), '5/4 🍅'); // over-estimate still reported
-});
-
 test('taskTextParts splits text and http(s) links, dropping trailing punctuation', () => {
   assert.deepEqual(T.taskTextParts('Review https://dev-log-minute-meeting.vercel.app/ today.'), [
     { type: 'text', value: 'Review ' },
