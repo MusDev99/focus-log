@@ -1144,6 +1144,16 @@ function startTaskDrag(e, li) {
   document.addEventListener('pointercancel', onEnd);
 }
 
+// ---- New activity flow (phones): one question per screen; the quick add above stays for fast capture ----
+function addFromFlow({ text, points, quadrant }) {
+  const task = store.addTask(text, quadrant, points);
+  if (!task) return;
+  fetchTasks();
+  showToast(`Added to ${quadrant ? `Q${quadrant} · ${QUADRANTS[quadrant].name}` : 'Unsorted'}`);
+}
+window.TaskFlow.init({ onAdd: addFromFlow, quadrants: QUADRANTS });
+document.getElementById('new-activity-btn').addEventListener('click', () => window.TaskFlow.open());
+
 taskFormEl.addEventListener('submit', (e) => {
   e.preventDefault();
   addTask(taskInputEl.value, parseInt(taskPointsEl.value, 10) || 0);

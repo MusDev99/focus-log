@@ -223,3 +223,41 @@ test('the Done list keeps its own delete button style', () => {
   assert.match(read('app.js'), /'task-delete-btn done-delete-btn'/);
   assert.match(read('style.css'), /\.task-delete-btn\s*\{/);
 });
+
+test('the new activity flow is a cached script that loads between timer-core and app, in a native dialog', () => {
+  assert.ok(shellPaths().includes('./flow.js'), 'flow.js is cached for offline use');
+  const html = read('index.html');
+  const order = ['timer-core.js', 'flow.js', 'app.js'].map((f) => html.indexOf(`<script src="${f}">`));
+  assert.ok(order.every((i) => i > -1) && order[0] < order[1] && order[1] < order[2], 'timer-core.js, then flow.js, then app.js');
+  assert.match(html, /<dialog id="flow-dialog"/);
+  ['flow-back', 'flow-close', 'flow-count', 'flow-progress', 'flow-question', 'flow-hint', 'flow-field', 'flow-error', 'flow-skip', 'flow-next', 'new-activity-btn'].forEach((id) => {
+    assert.match(html, new RegExp(`id="${id}"`), `${id} exists`);
+  });
+  assert.match(html, /id="flow-progress"[^>]*role="progressbar"/);
+  assert.match(html, /id="flow-error"[^>]*role="alert"/);
+});
+
+test('the flow shows what the person types with textContent only, and wires the rules from timer-core', () => {
+  const flow = read('flow.js');
+  const code = flow.replace(/\/\/.*$/gm, ''); // the comments may mention what the code avoids
+  assert.doesNotMatch(code, /innerHTML|insertAdjacentHTML|document\.write/);
+  ['flowStepError', 'flowResult', 'normalizeLink', 'FLOW_STEPS'].forEach((fn) => assert.match(flow, new RegExp(fn), `${fn} is used`));
+  const app = read('app.js');
+  assert.match(app, /window\.TaskFlow\.init\(\{ onAdd: addFromFlow/);
+  assert.match(app, /store\.addTask\(text, quadrant, points\)/);
+});
+
+test('the New activity button is for phones only; the flow is full screen there and a card on wide screens', () => {
+  const css = read('style.css');
+  assert.match(css, /\.new-activity-btn \{\s*display: none;/);
+  assert.match(css, /@media \(max-width: 600px\) \{\s*\.new-activity-btn \{\s*display: flex;/);
+  assert.match(css, /\.flow\[open\] \{\s*display: flex;/, 'a closed dialog must stay hidden: only [open] sets display');
+  assert.match(css, /@media \(min-width: 601px\) \{\s*\.flow \{/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.flow-body\.from-right/);
+});
+
+test('validate.sh checks flow.js too', () => {
+  const script = read('scripts/validate.sh');
+  assert.match(script, /for f in [^;]*flow\.js/);
+  assert.match(script, /-- store\.js timer-core\.js app\.js flow\.js/);
+});
