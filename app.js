@@ -3,7 +3,7 @@
 
 const store = window.FocusLogStore.createStore(window.localStorage); // also carries any old pomodoro-* data over, once
 const UI_KEYS = window.FocusLogStore.UI_KEYS;
-const { heatLevel, heatmapCells, taskTextParts, taskDisplayText, firstTaskLink, formatElapsed, goalProgress, shortcutAction, timeBySource, sizingCheck, sizingVerdictText, wipTasks } = window.TimerCore;
+const { heatLevel, heatmapCells, taskTextParts, taskDisplayText, firstTaskLink, formatElapsed, goalProgress, shortcutAction, timeBySource, sizingCheck, sizingVerdictText, wipTasks, lockAxis, swipePull, swipeArmed, swipeCommit } = window.TimerCore;
 
 let config = {
   daily_goal: 4, // hours of work per day
@@ -449,36 +449,16 @@ function renderTasks() {
     renderTaskText(textSpan, task.text);
     textSpan.addEventListener('click', () => selectActiveTask(task));
 
-    // Edit button
-    const editBtn = document.createElement('button');
-    editBtn.className = 'task-edit-btn';
-    editBtn.type = 'button';
-    editBtn.setAttribute('aria-label', 'Edit task');
-    editBtn.innerHTML = `
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 20h9"></path>
-        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path>
-      </svg>
-    `;
-    editBtn.addEventListener('click', (e) => {
+    // More button: edit, move, story points and delete live in one bottom sheet (a left swipe opens it too)
+    const moreBtn = document.createElement('button');
+    moreBtn.className = 'task-more-btn';
+    moreBtn.type = 'button';
+    moreBtn.setAttribute('aria-label', `More actions for "${taskDisplayText(task.text)}"`);
+    moreBtn.setAttribute('aria-haspopup', 'dialog');
+    moreBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>';
+    moreBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      startTaskEdit(li, task);
-    });
-
-    // Delete button
-    const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'task-delete-btn';
-    deleteBtn.type = 'button';
-    deleteBtn.setAttribute('aria-label', 'Delete task');
-    deleteBtn.innerHTML = `
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="18" y1="6" x2="6" y2="18"></line>
-        <line x1="6" y1="6" x2="18" y2="18"></line>
-      </svg>
-    `;
-    deleteBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      deleteTask(task.id);
+      openTaskSheet(task);
     });
 
     // Title with its points and time underneath, so the title keeps its width on phones
@@ -530,8 +510,8 @@ function renderTasks() {
       });
       li.appendChild(clockBtn);
     }
-    li.appendChild(editBtn);
-    li.appendChild(deleteBtn);
+    li.appendChild(moreBtn);
+    attachSwipe(li, task);
     taskListEl.appendChild(li);
   });
 
@@ -616,18 +596,19 @@ function buildMatrixChip(task) {
     moveToQuadrant(task.id, Number(e.key) || null, true);
   });
 
-  const editBtn = document.createElement('button');
-  editBtn.type = 'button';
-  editBtn.className = 'matrix-chip-edit';
-  editBtn.setAttribute('aria-label', `Edit "${shown}"`);
-  editBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path></svg>';
-  editBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
-  editBtn.addEventListener('click', (e) => {
+  const moreBtn = document.createElement('button');
+  moreBtn.type = 'button';
+  moreBtn.className = 'matrix-chip-more';
+  moreBtn.setAttribute('aria-label', `More actions for "${shown}"`);
+  moreBtn.setAttribute('aria-haspopup', 'dialog');
+  moreBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>';
+  moreBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+  moreBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    startTaskEdit(li, task);
+    openTaskSheet(task);
   });
 
-  li.append(check, body, editBtn);
+  li.append(check, body, moreBtn);
   const href = firstTaskLink(task.text);
   if (href) {
     const link = document.createElement('a');
@@ -641,6 +622,7 @@ function buildMatrixChip(task) {
     link.addEventListener('pointerdown', (e) => e.stopPropagation());
     li.appendChild(link);
   }
+  attachSwipe(li, task);
   return li;
 }
 
@@ -676,6 +658,7 @@ function startQuadrantDrag(e, li, task) {
     return el ? el.closest('.task-matrix .quadrant') : null;
   };
   const begin = (x, y) => {
+    gestureBusy = true;
     li.dataset.dragged = '1';
     const r = li.getBoundingClientRect();
     ghost = li.cloneNode(true);
@@ -729,6 +712,7 @@ function startQuadrantDrag(e, li, task) {
     if (ghost) ghost.remove();
     li.classList.remove('drag-source');
     taskMatrixEl.classList.remove('is-dragging');
+    gestureBusy = false;
     // Let the click that follows pointerup see the flag, then clear it
     setTimeout(() => { delete li.dataset.dragged; }, 0);
   }
@@ -869,6 +853,194 @@ function deleteTask(id) {
       saveActiveTask();
     },
   });
+}
+
+// ---- Bottom sheet: one place for a task's edit, move, story points and delete ----
+const sheetEl = document.getElementById('task-sheet');
+const sheetTitleEl = document.getElementById('task-sheet-title');
+const sheetQuadrantsEl = document.getElementById('sheet-quadrants');
+const sheetPointsEl = document.getElementById('sheet-points');
+let sheetTaskId = null;
+
+function sheetChip(label, pressed, onClick) {
+  const chip = document.createElement('button');
+  chip.type = 'button';
+  chip.className = 'sheet-chip';
+  chip.textContent = label;
+  chip.setAttribute('aria-pressed', String(pressed));
+  chip.addEventListener('click', onClick);
+  return chip;
+}
+
+/** Fill the sheet from the task as it is now, so a change (points) shows at once while it stays open. */
+function renderSheet() {
+  const task = tasks.find(t => t.id === sheetTaskId);
+  if (!task) { closeTaskSheet(); return; }
+  sheetTitleEl.textContent = taskDisplayText(task.text);
+  sheetQuadrantsEl.textContent = '';
+  [[null, 'Unsorted'], ...[1, 2, 3, 4].map(q => [q, `Q${q} · ${QUADRANTS[q].name}`])].forEach(([q, label]) => {
+    sheetQuadrantsEl.appendChild(sheetChip(label, (task.quadrant || null) === q, () => {
+      moveToQuadrant(task.id, q);
+      closeTaskSheet();
+    }));
+  });
+  sheetPointsEl.textContent = '';
+  const values = [...taskPointsEl.options].map(o => parseInt(o.value, 10));
+  if (task.points && !values.includes(task.points)) values.push(task.points);
+  values.sort((a, b) => a - b).forEach((points) => {
+    sheetPointsEl.appendChild(sheetChip(points ? String(points) : 'None', (task.points || 0) === points, () => {
+      store.updateTask(task.id, { points });
+      fetchTasks();
+      renderSheet();
+    }));
+  });
+}
+
+function openTaskSheet(task) {
+  sheetTaskId = task.id;
+  renderSheet();
+  if (!sheetEl.open) sheetEl.showModal();
+}
+
+function closeTaskSheet() {
+  if (sheetEl.open) sheetEl.close();
+}
+
+sheetEl.addEventListener('close', () => { sheetTaskId = null; });
+sheetEl.addEventListener('click', (e) => { if (e.target === sheetEl) closeTaskSheet(); }); // the backdrop
+document.getElementById('task-sheet-close').addEventListener('click', closeTaskSheet);
+document.getElementById('sheet-edit').addEventListener('click', () => {
+  const task = tasks.find(t => t.id === sheetTaskId);
+  closeTaskSheet(); // focus returns to the opener synchronously, so the editor can take it right after
+  if (!task) return;
+  const list = taskView === 'matrix' ? taskMatrixEl : taskListEl;
+  const row = list.querySelector(`[data-id="${CSS.escape(task.id)}"]`);
+  if (row) startTaskEdit(row, task);
+});
+document.getElementById('sheet-delete').addEventListener('click', () => {
+  const id = sheetTaskId;
+  closeTaskSheet();
+  if (id) deleteTask(id);
+});
+
+// ---- Swipe a task row (touch and pen only): right finishes it, left opens the sheet ----
+let gestureBusy = false; // a long-press drag is on: a swipe must not start under it
+const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+const DOTS_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>';
+
+/**
+ * The row follows the finger by transform; a coloured reveal grows in the gap it leaves behind. Vertical movement
+ * is never touched (the row sets touch-action: pan-y), so scrolling stays the browser's. The checkbox and the
+ * more button stay for everyone else: a swipe is a shortcut, never the only way.
+ */
+function attachSwipe(li, task) {
+  const doneLayer = document.createElement('div');
+  doneLayer.className = 'swipe-layer swipe-done';
+  doneLayer.setAttribute('aria-hidden', 'true');
+  doneLayer.innerHTML = 'Done' + CHECK_SVG;
+  const moreLayer = document.createElement('div');
+  moreLayer.className = 'swipe-layer swipe-more';
+  moreLayer.setAttribute('aria-hidden', 'true');
+  moreLayer.innerHTML = DOTS_SVG + 'More';
+  li.append(doneLayer, moreLayer);
+
+  const allow = { left: true, right: true };
+  let id = -1;
+  let x0 = 0;
+  let y0 = 0;
+  let axis = null;
+  let width = 1;
+  let armed = false;
+  let last = { t: 0, x: 0 };
+  let prev = last;
+  let lastSwipe = 0;
+  let resetTimer = null;
+
+  const place = (x) => {
+    li.style.transform = `translate3d(${x}px, 0, 0)`;
+    doneLayer.style.display = x > 0 ? 'flex' : 'none';
+    doneLayer.style.width = x > 0 ? `${x}px` : '0';
+    moreLayer.style.display = x < 0 ? 'flex' : 'none';
+    moreLayer.style.width = x < 0 ? `${-x}px` : '0';
+  };
+  const settle = () => {
+    li.style.transition = 'transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1)';
+    li.style.transform = 'translate3d(0, 0, 0)';
+    clearTimeout(resetTimer);
+    resetTimer = setTimeout(() => {
+      li.style.transition = '';
+      li.style.transform = '';
+      doneLayer.style.display = 'none';
+      moreLayer.style.display = 'none';
+    }, 230);
+  };
+  const mark = (on) => {
+    doneLayer.classList.toggle('armed', on);
+    moreLayer.classList.toggle('armed', on);
+  };
+
+  li.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' || e.button !== 0 || id !== -1 || gestureBusy) return;
+    if (e.target.closest('.task-drag-handle, .task-edit-row, input, select, textarea') || li.querySelector('.task-edit-row')) return;
+    clearTimeout(resetTimer);
+    id = e.pointerId;
+    x0 = e.clientX;
+    y0 = e.clientY;
+    axis = null;
+    armed = false;
+    width = li.offsetWidth || 1;
+    last = prev = { t: e.timeStamp, x: e.clientX };
+  });
+  li.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== id) return;
+    if (gestureBusy) { id = -1; return; }
+    const dx = e.clientX - x0;
+    if (axis === null) {
+      axis = lockAxis(dx, e.clientY - y0);
+      if (axis === null) return;
+      if (axis === 'y') { id = -1; return; }
+      li.setPointerCapture(id);
+      li.style.transition = 'none';
+    }
+    prev = last;
+    last = { t: e.timeStamp, x: e.clientX };
+    place(swipePull(dx, width, allow));
+    const now = swipeArmed(dx, width, allow);
+    if (now !== armed) {
+      armed = now;
+      mark(now);
+      if (now) buzz(10);
+    }
+  });
+  const end = (e, commit) => {
+    if (e.pointerId !== id) return;
+    const was = axis;
+    const dx = e.clientX - x0;
+    id = -1;
+    axis = null;
+    mark(false);
+    if (was !== 'x') return;
+    lastSwipe = Date.now();
+    const verdict = commit ? swipeCommit(dx, width, (last.x - prev.x) / Math.max(1, last.t - prev.t), allow) : null;
+    const r = li.getBoundingClientRect();
+    settle();
+    if (verdict === 'right') {
+      celebrate('tiny', r.left + 24, r.top + r.height / 2);
+      buzz(15);
+      toggleTask(task.id, true);
+    } else if (verdict === 'left') {
+      openTaskSheet(task);
+    }
+  };
+  li.addEventListener('pointerup', (e) => end(e, true));
+  li.addEventListener('pointercancel', (e) => end(e, false));
+  // The tap a browser may still send after a swipe must not select the row
+  li.addEventListener('click', (e) => {
+    if (Date.now() - lastSwipe < 350) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+  }, true);
 }
 
 /** Swap a task's title for an input; Enter or leaving the field saves, Esc cancels. */

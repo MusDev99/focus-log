@@ -21,7 +21,8 @@ You can also just open `index.html` directly in a browser.
 | 🎯 Daily goal | progress bar, configurable in settings |
 | 🌗 Dark mode | toggle in top bar, saved |
 | 📊 Stats | local-time day buckets, streak, 7-day chart |
-| ✏️ Tasks | edit inline (pencil), reorder by dragging the handle or with ↑/↓ on it |
+| ✏️ Tasks | reorder by dragging the handle or with ↑/↓ on it; edit, move, story points and delete are in one bottom sheet behind each task's ⋯ |
+| 👆 Swipe | on a touch screen, swipe a task right to finish it or left to open its sheet (vertical scroll and pinch zoom are untouched; a long-press still drags a matrix chip, and a mouse drags as before). Every action keeps a button, so the swipe is only a shortcut |
 | 🎯 Story points | optional points per task; the daily points goal and stats use them |
 | 🧑‍💻 Developer view | Stats card: focus time by Jira ticket or GitHub repo (from the first link in each task, last 7 days), a sizing check (average time per story-point size over 4 weeks, and whether bigger sizes really take longer), and a warning when 3 or more tasks are started but not finished |
 | 🗓 Heatmap | focus minutes per day for the last 12 weeks |

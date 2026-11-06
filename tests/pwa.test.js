@@ -197,9 +197,29 @@ test('every character plays a recorded clip that the service worker precaches, w
   });
 });
 
-test('matrix chips have an edit button that reuses the list editor', () => {
+test('list rows and matrix chips open one bottom sheet that reuses the list editor', () => {
   const app = read('app.js');
-  assert.match(app, /editBtn\.className = 'matrix-chip-edit'/);
-  assert.match(app, /querySelector\('\.task-text, \.matrix-chip-body'\)/);
-  assert.match(read('style.css'), /\.matrix-chip-edit\s*\{/);
+  assert.match(app, /moreBtn\.className = 'task-more-btn'/);
+  assert.match(app, /moreBtn\.className = 'matrix-chip-more'/);
+  assert.match(app, /querySelector\('\.task-text, \.matrix-chip-body'\)/, 'the inline editor still serves list rows and chips');
+  assert.match(app, /getElementById\('sheet-edit'\)[\s\S]*startTaskEdit\(row, task\)/, 'Edit text in the sheet reuses it');
+  assert.doesNotMatch(app, /'task-edit-btn'|'matrix-chip-edit'/, 'the old edit buttons are gone');
+  const css = read('style.css');
+  assert.match(css, /\.matrix-chip-more\s*\{/);
+  assert.match(css, /\.task-more-btn\s*\{/);
+  assert.match(read('index.html'), /<dialog id="task-sheet"/);
+});
+
+test('swipe leaves vertical scroll and pinch to the browser, and never starts from a mouse', () => {
+  const css = read('style.css');
+  assert.match(css, /\.task-item,\s*\.matrix-chip\s*\{[^}]*touch-action: pan-y pinch-zoom/);
+  const swipe = read('app.js').slice(read('app.js').indexOf('function attachSwipe'));
+  assert.match(swipe, /e\.pointerType === 'mouse'/);
+  assert.match(swipe, /gestureBusy/);
+  assert.match(swipe, /\.task-drag-handle/, 'a drag from the reorder handle is not a swipe');
+});
+
+test('the Done list keeps its own delete button style', () => {
+  assert.match(read('app.js'), /'task-delete-btn done-delete-btn'/);
+  assert.match(read('style.css'), /\.task-delete-btn\s*\{/);
 });
