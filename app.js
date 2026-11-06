@@ -3,7 +3,7 @@
 
 const store = window.FocusLogStore.createStore(window.localStorage); // also carries any old pomodoro-* data over, once
 const UI_KEYS = window.FocusLogStore.UI_KEYS;
-const { heatLevel, heatmapCells, taskTextParts, taskDisplayText, firstTaskLink, formatElapsed, goalProgress, shortcutAction } = window.TimerCore;
+const { heatLevel, heatmapCells, taskTextParts, taskDisplayText, firstTaskLink, formatElapsed, goalProgress, shortcutAction, timeBySource, sizingCheck, sizingVerdictText, wipTasks } = window.TimerCore;
 
 let config = {
   daily_goal: 4, // hours of work per day
@@ -1300,9 +1300,91 @@ function renderTaskStats(rows) {
   });
 }
 
+// ---- Developer view: time by ticket or repo, sizing check, work in progress ----
+const wipNoteEl = document.getElementById('wip-note');
+const streamListEl = document.getElementById('stream-list');
+const streamEmptyEl = document.getElementById('stream-empty');
+const sizingListEl = document.getElementById('sizing-list');
+const sizingEmptyEl = document.getElementById('sizing-empty');
+const sizingVerdictEl = document.getElementById('sizing-verdict');
+
+/** "45m" or "2h 05m". */
+function durationText(minutes) {
+  const m = Math.round(minutes);
+  return m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m` : `${m}m`;
+}
+
+function statRow(nameEl, metaText, fraction, muted, extraClass = '') {
+  const li = document.createElement('li');
+  li.className = 'task-stat-row' + (muted ? ' muted' : '') + (extraClass ? ` ${extraClass}` : '');
+  const name = document.createElement('span');
+  name.className = 'task-stat-name';
+  name.appendChild(nameEl);
+  const meta = document.createElement('span');
+  meta.className = 'task-stat-meta';
+  meta.textContent = metaText;
+  li.append(name, meta);
+  if (fraction !== null) {
+    const bar = document.createElement('span');
+    bar.className = 'task-stat-bar';
+    bar.style.width = `${Math.max(4, Math.round(fraction * 100))}%`;
+    li.appendChild(bar);
+  }
+  return li;
+}
+
+function renderDevMetrics() {
+  const tasks = store.listTasks();
+  const now = new Date();
+
+  // Work in progress: a pile of started tasks means little is finishing
+  const wip = wipTasks(tasks).length;
+  wipNoteEl.hidden = wip < 3;
+  if (wip >= 3) wipNoteEl.textContent = `${wip} tasks are started but not finished. Finish one before starting another: fewer open tasks finish sooner.`;
+
+  // Time by ticket or repo (last 7 days)
+  const { totalSeconds, linkedSeconds, streams } = timeBySource(tasks, store.listFocusSessions(), now);
+  streamListEl.innerHTML = '';
+  streamEmptyEl.classList.toggle('visible', streams.length === 0);
+  const maxSeconds = Math.max(...streams.map((s) => s.seconds), 1);
+  streams.slice(0, 6).forEach((s) => {
+    const link = document.createElement('a');
+    link.className = 'task-link';
+    link.href = s.href;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.title = s.href;
+    link.textContent = s.label;
+    const parts = [`${s.tasks} ${s.tasks === 1 ? 'task' : 'tasks'}`];
+    if (s.done > 0) parts.push(`${s.done} done${s.points ? ` · ${s.points} SP` : ''}`);
+    parts.push(durationText(s.seconds / 60));
+    streamListEl.appendChild(statRow(link, parts.join(' · '), s.seconds / maxSeconds, false, 'stream-row'));
+  });
+  if (streams.length > 0 && totalSeconds > linkedSeconds) {
+    const none = document.createElement('span');
+    none.textContent = 'No link';
+    streamListEl.appendChild(statRow(none, durationText((totalSeconds - linkedSeconds) / 60), null, true));
+  }
+
+  // Sizing check: does a bigger story point value really take longer? (last 4 weeks)
+  const sizing = sizingCheck(tasks, now);
+  sizingListEl.innerHTML = '';
+  sizingEmptyEl.classList.toggle('visible', sizing.rows.length === 0);
+  const maxMs = Math.max(...sizing.rows.map((r) => r.avgMs), 1);
+  sizing.rows.forEach((r) => {
+    const label = document.createElement('span');
+    label.textContent = `${r.points} SP`;
+    sizingListEl.appendChild(statRow(label, `${durationText(r.avgMs / 60000)} · ${r.tasks}×`, r.avgMs / maxMs, false));
+  });
+  const verdict = sizingVerdictText(sizing);
+  sizingVerdictEl.hidden = verdict === '';
+  sizingVerdictEl.textContent = verdict;
+}
+
 function loadInsights() {
   renderHeatmap(store.heatmap(84));
   renderTaskStats(store.taskStats());
+  renderDevMetrics();
 }
 
 /** Build a file in the browser and hand it to the user as a download. */

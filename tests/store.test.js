@@ -626,3 +626,30 @@ test('backups carry the new app id, and backups made before the rename still imp
   assert.equal(other.listTasks()[0].text, 'From the old app');
   assert.throws(() => other.importBackup({ ...legacy, app: 'something-else' }), /not a Focus Log backup/);
 });
+
+test('listFocusSessions gives plain focus sessions and skips corrupt entries', () => {
+  const { store, storage } = makeStore();
+  const t = store.addTask('Deep work');
+  store.logSession({ mode: 'focus', duration_seconds: 600, task_id: t.id });
+  store.logSession({ mode: 'shortBreak', duration_seconds: 300, task_id: t.id });
+  const raw = JSON.parse(storage.getItem(S.KEYS.sessions));
+  raw.push({ id: 'bad', mode: 'focus', duration_seconds: 'x', completed_at: 'nope' }, null);
+  storage.setItem(S.KEYS.sessions, JSON.stringify(raw));
+  const list = store.listFocusSessions();
+  assert.equal(list.length, 1, 'the break and the corrupt entries are left out');
+  assert.deepEqual(Object.keys(list[0]).sort(), ['completed_at', 'duration_seconds', 'mode', 'task_id']);
+  assert.equal(list[0].task_id, t.id);
+});
+
+test('a stored task or session that is not an object is skipped, not a crash', () => {
+  const { store, storage } = makeStore();
+  const t = store.addTask('Real task');
+  store.logSession({ mode: 'focus', duration_seconds: 600, task_id: t.id });
+  storage.setItem(S.KEYS.tasks, JSON.stringify([...JSON.parse(storage.getItem(S.KEYS.tasks)), null, 'junk', 7]));
+  storage.setItem(S.KEYS.sessions, JSON.stringify([...JSON.parse(storage.getItem(S.KEYS.sessions)), null, 'junk', 7]));
+  assert.deepEqual(store.listTasks().map((x) => x.text), ['Real task']);
+  assert.equal(store.summary().total_sessions, 1);
+  assert.equal(store.taskStats().length, 1);
+  assert.equal(store.exportBackup().tasks.length, 1);
+  assert.equal(store.exportBackup().sessions.length, 1);
+});
