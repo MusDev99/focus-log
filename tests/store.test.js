@@ -40,16 +40,15 @@ test('corrupt storage is ignored instead of crashing', () => {
   assert.equal(store.summary().total_sessions, 0);
 });
 
-test('task CRUD trims text, clamps estimate and gives unique ids', () => {
+test('task CRUD trims text and gives unique ids', () => {
   const { store } = makeStore();
   assert.equal(store.addTask('   '), null);
-  const a = store.addTask('  Write report  ', 50);
-  const b = store.addTask('x'.repeat(300), -3);
+  const a = store.addTask('  Write report  ');
+  const b = store.addTask('x'.repeat(300));
   assert.notEqual(a.id, b.id);
   assert.equal(a.text, 'Write report');
-  assert.equal(a.estimate, 20);
   assert.equal(b.text.length, 200);
-  assert.equal(b.estimate, 0);
+  assert.equal('estimate' in a, false, 'the old pomodoro estimate no longer exists');
 
   assert.equal(store.updateTask(a.id, { completed: true }), true);
   assert.equal(store.updateTask('missing', { completed: true }), false);
@@ -60,15 +59,15 @@ test('task CRUD trims text, clamps estimate and gives unique ids', () => {
   assert.deepEqual(store.listTasks().map((t) => t.id), [a.id]);
 });
 
-test('logSession validates input and counts focus sessions per task', () => {
+test('logSession validates input and counts focus sessions', () => {
   const { store } = makeStore();
-  const t = store.addTask('Deep work', 3);
+  const t = store.addTask('Deep work');
   assert.equal(store.logSession({ mode: 'nap' }), null);
   assert.equal(store.logSession({ duration_seconds: 0 }), null);
   store.logSession({ mode: 'focus', duration_seconds: 1500, task_id: t.id });
   store.logSession({ mode: 'focus', duration_seconds: 1500, task_id: t.id });
   store.logSession({ mode: 'shortBreak', duration_seconds: 300, task_id: t.id });
-  assert.equal(store.listTasks()[0].actual, 2);
+  assert.equal(store.summary().total_sessions, 2, 'two focus sessions; the break is not counted');
 });
 
 test('summary buckets by local day and computes the streak', () => {
@@ -151,7 +150,7 @@ test('reorderTasks follows the given ids and keeps unlisted tasks at the end', (
 
 test('backup round-trips into an empty browser', () => {
   const { store } = makeStore();
-  const t = store.addTask('Ship it', 2);
+  const t = store.addTask('Ship it');
   store.logSession({ duration_seconds: 1500, task_id: t.id });
   store.saveSettings({ focus_duration: 45, theme: 'dark' });
   const backup = JSON.parse(JSON.stringify(store.exportBackup()));
@@ -159,7 +158,7 @@ test('backup round-trips into an empty browser', () => {
   const other = makeStore().store;
   assert.deepEqual(other.importBackup(backup), { tasks: 1, sessions: 1 });
   assert.equal(other.listTasks()[0].text, 'Ship it');
-  assert.equal(other.listTasks()[0].actual, 1);
+  assert.equal(other.summary().total_sessions, 1);
   assert.equal(other.getSettings().focus_duration, 45);
   assert.equal(other.getSettings().theme, 'dark');
 });
@@ -179,14 +178,14 @@ test('importing merges by id: re-importing adds nothing, other devices data is k
 
 test('importBackup rejects other files and skips invalid rows', () => {
   const { store } = makeStore();
-  assert.throws(() => store.importBackup({ hello: 1 }), /not a Pomodoro backup/);
-  assert.throws(() => store.importBackup(null), /not a Pomodoro backup/);
+  assert.throws(() => store.importBackup({ hello: 1 }), /not a Focus Log backup/);
+  assert.throws(() => store.importBackup(null), /not a Focus Log backup/);
   const base = store.exportBackup();
   assert.throws(() => store.importBackup({ ...base, version: 99 }), /newer version/);
 
   const result = store.importBackup({
     ...base,
-    tasks: [{ id: 'ok', text: '  Valid  ', estimate: 99 }, { id: 'bad', text: '' }, 'junk', { text: 'no id' }],
+    tasks: [{ id: 'ok', text: '  Valid  ', estimate: 99 },  { id: 'bad', text: '' }, 'junk', { text: 'no id' }],
     sessions: [
       { id: 's1', mode: 'focus', duration_seconds: 1500, completed_at: '2026-10-27T10:00:00Z', task_id: 'ok' },
       { id: 's2', mode: 'nap', duration_seconds: 600, completed_at: '2026-10-27T10:00:00Z' },
@@ -198,8 +197,7 @@ test('importBackup rejects other files and skips invalid rows', () => {
   assert.deepEqual(result, { tasks: 1, sessions: 1 });
   const [task] = store.listTasks();
   assert.equal(task.text, 'Valid');
-  assert.equal(task.estimate, 20);
-  assert.equal(task.actual, 1);
+  assert.equal('estimate' in task, false, 'an estimate in an old backup is dropped');
   assert.equal(store.getSettings().focus_duration, 25);
 });
 
@@ -240,13 +238,13 @@ test('longestStreak finds the longest consecutive run, across month ends', () =>
 test('restoreTask puts a deleted task back in its old place, once', () => {
   const { store } = makeStore();
   const a = store.addTask('A');
-  const b = store.addTask('B', 3);
+  const b = store.addTask('B', null, 3);
   store.addTask('C');
   const removed = store.listTasks()[1];
   store.deleteTask(b.id);
   assert.equal(store.restoreTask(removed, 1), true);
   assert.deepEqual(store.listTasks().map((t) => t.text), ['A', 'B', 'C']);
-  assert.equal(store.listTasks()[1].estimate, 3);
+  assert.equal(store.listTasks()[1].points, 3);
   assert.equal(store.restoreTask(removed, 0), false, 'duplicate id is ignored');
   assert.equal(store.restoreTask({ id: a.id + 'x', text: '  ' }), false, 'invalid task is ignored');
   assert.equal(store.listTasks().length, 3);
@@ -274,9 +272,9 @@ test('dayDetail totals one local day and splits it by task', () => {
 
 test('tasks carry an Eisenhower quadrant (1-4) or null when unsorted', () => {
   const { store } = makeStore();
-  const a = store.addTask('Pay rent', 0, 1);
+  const a = store.addTask('Pay rent', 1);
   const b = store.addTask('Plan the week');
-  store.addTask('Bad quadrant', 0, 7);
+  store.addTask('Bad quadrant', 7);
   assert.deepEqual(store.listTasks().map((t) => t.quadrant), [1, null, null]);
 
   assert.equal(store.updateTask(b.id, { quadrant: 2 }), true);
@@ -294,7 +292,7 @@ test('quadrants survive backup and old tasks without one read as unsorted', () =
   storage.setItem(S.KEYS.tasks, JSON.stringify([{ id: 'old', text: 'Legacy', completed: false, estimate: 0, created_at: '2026-01-01T00:00:00Z' }]));
   assert.equal(store.listTasks()[0].quadrant, null);
 
-  store.addTask('Exercise', 0, 2);
+  store.addTask('Exercise', 2);
   const backup = store.exportBackup();
   const other = makeStore().store;
   other.importBackup(backup);
@@ -303,9 +301,9 @@ test('quadrants survive backup and old tasks without one read as unsorted', () =
 
 test('tasks carry optional story points, clamped to 0-100', () => {
   const { store } = makeStore();
-  const a = store.addTask('Ship login', 2, null, 5);
+  const a = store.addTask('Ship login', null, 5);
   store.addTask('No points');
-  store.addTask('Too big', 0, null, 500);
+  store.addTask('Too big', null, 500);
   assert.deepEqual(store.listTasks().map((t) => t.points), [5, 0, 100]);
   store.updateTask(a.id, { points: 8 });
   assert.equal(store.listTasks()[0].points, 8);
@@ -315,7 +313,7 @@ test('tasks carry optional story points, clamped to 0-100', () => {
 
 test('completing a task stamps completed_at; reopening clears it', () => {
   const { store, clock } = makeStore();
-  const a = store.addTask('Write tests', 0, null, 3);
+  const a = store.addTask('Write tests', null, 3);
   assert.equal(store.listTasks()[0].completed_at, null);
   store.updateTask(a.id, { completed: true });
   const stamp = store.listTasks()[0].completed_at;
@@ -330,7 +328,7 @@ test('completing a task stamps completed_at; reopening clears it', () => {
 test('pointsSummary scores points on the day a task was completed', () => {
   const { store, clock, storage } = makeStore(new Date(2026, 9, 26, 10, 0, 0));
   store.saveSettings({ daily_points_goal: 5 });
-  const done = (text, points) => store.updateTask(store.addTask(text, 0, null, points).id, { completed: true });
+  const done = (text, points) => store.updateTask(store.addTask(text, null, points).id, { completed: true });
   done('Mon task', 5); // Oct 26: on target
   clock.t = new Date(2026, 9, 27, 10, 0, 0);
   done('Tue a', 3);
@@ -339,7 +337,7 @@ test('pointsSummary scores points on the day a task was completed', () => {
   done('Wed a', 2);
   clock.t = new Date(2026, 9, 28, 11, 0, 0);
   done('Wed b', 1);
-  store.addTask('Open', 0, null, 8);
+  store.addTask('Open', null, 8);
   store.addTask('Open, unscored');
   // a task completed before points were tracked has no completed_at
   const legacy = JSON.parse(storage.getItem(S.KEYS.tasks)).concat({ id: 'x', text: 'Legacy', completed: true, points: 13 });
@@ -358,7 +356,7 @@ test('pointsSummary scores points on the day a task was completed', () => {
 
 test('points and completion time survive backup and undo', () => {
   const { store } = makeStore();
-  const a = store.addTask('Review PR', 0, 1, 3);
+  const a = store.addTask('Review PR', 1, 3);
   store.updateTask(a.id, { completed: true });
   const task = store.listTasks()[0];
   const other = makeStore().store;
@@ -526,15 +524,6 @@ test('resetToday zeroes today but keeps earlier days, and restarts a running str
   assert.equal(store.summary().total_minutes, 30, 'yesterday survives');
 });
 
-test('a task counts one pomodoro for every 25 minutes of work logged on it', () => {
-  const { store } = makeStore();
-  const a = store.addTask('Deep work', 3);
-  store.logSession({ task_id: a.id, duration_seconds: 24 * 60 });
-  assert.equal(store.listTasks()[0].actual, 0);
-  store.logSession({ task_id: a.id, duration_seconds: 27 * 60 });
-  assert.equal(store.listTasks()[0].actual, 2);
-});
-
 test('cat sounds are a setting that defaults to on', () => {
   const { store } = makeStore();
   assert.equal(store.getSettings().cat_sound, 1);
@@ -547,4 +536,93 @@ test('character is a setting: cat by default, dog / cow / pig accepted, anything
   assert.equal(store.getSettings().character, 'cat');
   ['dog', 'cow', 'pig', 'cat'].forEach((c) => assert.equal(store.saveSettings({ character: c }).character, c));
   assert.equal(store.saveSettings({ character: 'dragon' }).character, 'cat', 'invalid values are ignored');
+});
+
+// ---- the rename: data saved by the old Pomodoro app is carried over, once, and never lost
+
+const OLD = {
+  tasks: JSON.stringify([{ id: 't1', text: 'Old task', completed: false, estimate: 3, points: 2, created_at: '2026-10-01T00:00:00.000Z' }]),
+  sessions: JSON.stringify([{ id: 's1', mode: 'focus', duration_seconds: 1500, completed_at: '2026-10-02T10:00:00.000Z', task_id: 't1' }]),
+  settings: JSON.stringify({ focus_duration: 45, theme: 'dark' }),
+};
+
+function oldStorage() {
+  const storage = memoryStorage();
+  storage.setItem('pomodoro-tasks', OLD.tasks);
+  storage.setItem('pomodoro-sessions', OLD.sessions);
+  storage.setItem('pomodoro-settings', OLD.settings);
+  storage.setItem('pomodoro-theme', 'dark');
+  storage.setItem('pomodoro-active-task', 't1');
+  storage.setItem('pomodoro-view', 'tasks');
+  return storage;
+}
+
+test('first run after the rename carries the old pomodoro-* data over to the new keys', () => {
+  const storage = oldStorage();
+  const store = S.createStore(storage);
+  assert.deepEqual(store.listTasks().map((t) => t.text), ['Old task']);
+  assert.equal(store.listTasks()[0].points, 2);
+  assert.equal(store.summary().total_sessions, 1);
+  assert.equal(store.getSettings().focus_duration, 45);
+  assert.equal(store.getSettings().theme, 'dark');
+  // the small UI preferences (raw strings, not JSON) come across too
+  assert.equal(storage.getItem(S.UI_KEYS.theme), 'dark');
+  assert.equal(storage.getItem(S.UI_KEYS.activeTask), 't1');
+  assert.equal(storage.getItem(S.UI_KEYS.view), 'tasks');
+});
+
+test('the old keys are left untouched as a backup', () => {
+  const storage = oldStorage();
+  S.createStore(storage);
+  assert.equal(storage.getItem('pomodoro-tasks'), OLD.tasks);
+  assert.equal(storage.getItem('pomodoro-sessions'), OLD.sessions);
+  assert.equal(storage.getItem('pomodoro-settings'), OLD.settings);
+  assert.equal(storage.getItem('pomodoro-theme'), 'dark');
+});
+
+test('the migration runs once: deleting data afterwards does not bring the old copy back', () => {
+  const storage = oldStorage();
+  const first = S.createStore(storage);
+  first.listTasks().forEach((t) => first.deleteTask(t.id));
+  assert.deepEqual(S.createStore(storage).listTasks(), []);
+  assert.equal(S.migrateLegacyKeys(storage), 0);
+});
+
+test('the migration never overwrites data already saved under the new names', () => {
+  const storage = oldStorage();
+  storage.setItem(S.KEYS.tasks, JSON.stringify([{ id: 'new', text: 'New task', completed: false, created_at: '2026-10-05T00:00:00.000Z' }]));
+  const store = S.createStore(storage);
+  assert.deepEqual(store.listTasks().map((t) => t.text), ['New task'], 'the new data wins');
+  assert.equal(store.summary().total_sessions, 1, 'keys that were still empty are filled');
+});
+
+test('a fresh install has nothing to migrate and writes nothing extra', () => {
+  const storage = memoryStorage();
+  S.createStore(storage);
+  assert.equal(storage.raw.size, 0);
+});
+
+test('a storage that throws never breaks the migration', () => {
+  const broken = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); } };
+  assert.equal(S.migrateLegacyKeys(broken), 0);
+  assert.doesNotThrow(() => S.createStore(broken));
+});
+
+test('the old pomodoro estimate is dropped on read, in lists and in exports', () => {
+  const store = S.createStore(oldStorage());
+  assert.equal('estimate' in store.listTasks()[0], false);
+  assert.equal('estimate' in store.exportBackup().tasks[0], false);
+  assert.equal(store.listTasks()[0].text, 'Old task', 'the rest of the task is intact');
+});
+
+test('backups carry the new app id, and backups made before the rename still import', () => {
+  const { store } = makeStore();
+  store.addTask('Mine');
+  assert.equal(store.exportBackup().app, 'focus-log');
+
+  const legacy = { app: 'pomodoro-focus-dashboard', version: 1, tasks: [{ id: 'x1', text: 'From the old app', estimate: 4 }], sessions: [], settings: {} };
+  const other = makeStore().store;
+  assert.deepEqual(other.importBackup(legacy), { tasks: 1, sessions: 0 });
+  assert.equal(other.listTasks()[0].text, 'From the old app');
+  assert.throws(() => other.importBackup({ ...legacy, app: 'something-else' }), /not a Focus Log backup/);
 });

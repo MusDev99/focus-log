@@ -971,34 +971,6 @@ body {
   gap: 10px;
 }
 
-/* Task estimates */
-.task-estimate {
-  width: 52px;
-  background: var(--surface-muted);
-  border: 1px solid var(--card-border);
-  border-radius: 14px;
-  padding: 10px 6px;
-  font-family: inherit;
-  font-size: 0.86rem;
-  text-align: center;
-  color: var(--text-main);
-  outline: none;
-}
-
-.task-estimate-badge {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--text-muted);
-  white-space: nowrap;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--surface-muted);
-}
-
-.task-estimate-badge.over {
-  color: #c05621;
-}
-
 /* Task reorder + inline edit */
 .task-item {
   gap: 6px;
@@ -1416,8 +1388,7 @@ button.heat-cell:hover { transform: scale(1.25); }
   min-width: 44px;
 }
 
-.task-input,
-.task-estimate {
+.task-input {
   min-height: 44px;
   font-size: 16px; /* stops iOS zooming into inputs */
 }
@@ -2321,8 +2292,7 @@ button.heat-cell:hover { transform: scale(1.25); }
   cursor: pointer;
 }
 
-.task-points:focus,
-.task-estimate:focus {
+.task-points:focus {
   border-color: var(--theme-accent);
   box-shadow: 0 0 0 3px var(--theme-accent-light);
 }
@@ -2581,7 +2551,6 @@ button.heat-cell:hover { transform: scale(1.25); }
     flex: 1 1 100%;
   }
 
-  .task-form .task-estimate,
   .task-form .task-points {
     flex: 1;
     width: auto;

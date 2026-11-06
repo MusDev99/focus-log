@@ -1,7 +1,7 @@
 {
-  "name": "pomodoro-app",
+  "name": "focus-log",
   "private": true,
-  "description": "Pomodoro Focus Dashboard",
+  "description": "Focus Log: a work and break clock with tasks, story points and focus analytics, stored only in your browser",
   "scripts": {
     "start": "python3 -m http.server 8000",
     "test": "node --test tests/*.test.js"

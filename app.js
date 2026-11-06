@@ -1,8 +1,9 @@
-// Pomodoro Focus Dashboard - State, Timer, localStorage persistence, & Web Audio Integration
+// Focus Log - State, work/break clock, tasks, localStorage persistence, & Web Audio Integration
 // Pure timer helpers live in timer-core.js and the data layer in store.js (both unit-tested).
 
-const store = window.PomodoroStore.createStore(window.localStorage);
-const { heatLevel, heatmapCells, estimateLabel, taskTextParts, taskDisplayText, firstTaskLink, formatElapsed, goalProgress, shortcutAction } = window.TimerCore;
+const store = window.FocusLogStore.createStore(window.localStorage); // also carries any old pomodoro-* data over, once
+const UI_KEYS = window.FocusLogStore.UI_KEYS;
+const { heatLevel, heatmapCells, taskTextParts, taskDisplayText, firstTaskLink, formatElapsed, goalProgress, shortcutAction } = window.TimerCore;
 
 let config = {
   daily_goal: 4, // hours of work per day
@@ -33,7 +34,7 @@ const tabButtons = document.querySelectorAll('.tab-btn');
 const catStageEl = document.getElementById('cat-stage');
 const navTimerLabelEl = document.getElementById('nav-timer-label');
 
-const ACTIVE_TASK_KEY = 'pomodoro-active-task';
+const ACTIVE_TASK_KEY = UI_KEYS.activeTask;
 const PLAY_ICON = '<path d="M8 5v14l11-7z"/>';
 const COFFEE_ICON = '<path d="M4 8h12v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M16 10h2a2.5 2.5 0 0 1 0 5h-2" fill="none" stroke="currentColor" stroke-width="2"/>';
 const MODE_STATUS = { idle: 'Ready when you are', work: 'Working…', break: 'Break time ☕' };
@@ -53,7 +54,7 @@ function updateClock() {
   const shown = formatElapsed(onBreak ? t.break_ms : t.work_ms);
 
   timeDisplayEl.textContent = shown;
-  document.title = t.mode === 'idle' ? 'Focus Dashboard - Pomodoro' : `${shown} · ${onBreak ? 'Break' : 'Work'}`;
+  document.title = t.mode === 'idle' ? 'Focus Log' : `${shown} · ${onBreak ? 'Break' : 'Work'}`;
   modeStatusEl.textContent = MODE_STATUS[t.mode];
   stretchLineEl.hidden = t.mode === 'idle';
   stretchLineEl.textContent = `${onBreak ? 'This break' : 'This stretch'} ${formatElapsed(t.stretch_ms)}`;
@@ -73,7 +74,7 @@ function cheer() {
 
 function checkGoalReached(workMs) {
   if (workMs < config.daily_goal * 3600000) return;
-  const day = window.PomodoroStore.localDayKey(new Date());
+  const day = window.FocusLogStore.localDayKey(new Date());
   if (goalReachedDay === day) return;
   goalReachedDay = day;
   if (!goalPrimed) return;
@@ -262,7 +263,6 @@ setInterval(updateClock, 1000);
 // ====================================================
 const taskFormEl = document.getElementById('task-form');
 const taskInputEl = document.getElementById('task-input');
-const taskEstimateEl = document.getElementById('task-estimate');
 const taskPointsEl = document.getElementById('task-points');
 const taskListEl = document.getElementById('task-list');
 const taskCounterEl = document.getElementById('task-counter');
@@ -278,7 +278,7 @@ const QUADRANTS = {
   3: { name: 'Delegate', short: 'Delegate' },
   4: { name: 'Drop', short: 'Drop' },
 };
-const TASK_VIEW_KEY = 'pomodoro-task-view';
+const TASK_VIEW_KEY = UI_KEYS.taskView;
 const taskMatrixEl = document.getElementById('task-matrix');
 const taskViewBtns = document.querySelectorAll('.task-view-btn');
 let taskView = 'list';
@@ -481,21 +481,13 @@ function renderTasks() {
       deleteTask(task.id);
     });
 
-    // Title with the estimate badge underneath, so the title keeps its width on phones
+    // Title with its points and time underneath, so the title keeps its width on phones
     const main = document.createElement('div');
     main.className = 'task-main';
     main.appendChild(textSpan);
 
     const meta = document.createElement('div');
     meta.className = 'task-meta';
-    const label = estimateLabel(task.actual, task.estimate);
-    if (label) {
-      const est = document.createElement('span');
-      est.className = 'task-estimate-badge' + (task.estimate && task.actual > task.estimate ? ' over' : '');
-      est.textContent = label;
-      est.title = task.estimate ? `${task.actual} done of ${task.estimate} estimated` : `${task.actual} done`;
-      meta.appendChild(est);
-    }
     if (task.points) {
       const sp = document.createElement('span');
       sp.className = 'task-points-badge';
@@ -598,13 +590,6 @@ function buildMatrixChip(task) {
   title.className = 'matrix-chip-text';
   title.textContent = shown; // the chip is a button, so its link opens from the icon beside it
   body.appendChild(title);
-  const label = estimateLabel(task.actual, task.estimate);
-  if (label) {
-    const est = document.createElement('span');
-    est.className = 'matrix-chip-est';
-    est.textContent = label;
-    body.appendChild(est);
-  }
   if (task.points) {
     const sp = document.createElement('span');
     sp.className = 'matrix-chip-est matrix-chip-points';
@@ -816,8 +801,8 @@ function updateTaskClocks() {
   if (activeTaskId) syncActiveTaskPill();
 }
 
-function addTask(text, estimate = 0, points = 0) {
-  if (store.addTask(text, estimate, null, points)) fetchTasks();
+function addTask(text, points = 0) {
+  if (store.addTask(text, null, points)) fetchTasks();
 }
 
 function toggleTask(id, completed) {
@@ -989,10 +974,8 @@ function startTaskDrag(e, li) {
 
 taskFormEl.addEventListener('submit', (e) => {
   e.preventDefault();
-  const estimate = Math.min(20, Math.max(0, parseInt(taskEstimateEl.value, 10) || 0));
-  addTask(taskInputEl.value, estimate, parseInt(taskPointsEl.value, 10) || 0);
+  addTask(taskInputEl.value, parseInt(taskPointsEl.value, 10) || 0);
   taskInputEl.value = '';
-  taskEstimateEl.value = '';
   taskPointsEl.value = '0';
 });
 
@@ -1211,7 +1194,7 @@ function renderDayDetail(el, dateKey, onClose) {
   title.textContent = dayLabel(dateKey);
   const total = document.createElement('span');
   total.className = 'day-detail-total';
-  total.textContent = d.sessions ? `${Math.round(d.minutes)} min · ${d.sessions} 🍅` : 'No focus';
+  total.textContent = d.sessions ? `${Math.round(d.minutes)} min · ${d.sessions} ${d.sessions === 1 ? 'session' : 'sessions'}` : 'No focus';
   const close = document.createElement('button');
   close.type = 'button';
   close.className = 'day-detail-close';
@@ -1236,7 +1219,7 @@ function renderDayDetail(el, dateKey, onClose) {
     name.textContent = taskDisplayText(t.label);
     const meta = document.createElement('span');
     meta.className = 'day-detail-meta';
-    meta.textContent = `${t.sessions} 🍅 · ${Math.round(t.minutes)}m`;
+    meta.textContent = `${t.sessions} ${t.sessions === 1 ? 'session' : 'sessions'} · ${Math.round(t.minutes)}m`;
     li.append(name, meta);
     list.appendChild(li);
   });
@@ -1308,7 +1291,7 @@ function renderTaskStats(rows) {
     name.textContent = taskDisplayText(row.label);
     const meta = document.createElement('span');
     meta.className = 'task-stat-meta';
-    meta.textContent = `${row.sessions} 🍅 · ${Math.round(row.minutes)}m`;
+    meta.textContent = `${row.sessions} ${row.sessions === 1 ? 'session' : 'sessions'} · ${Math.round(row.minutes)}m`;
     const bar = document.createElement('span');
     bar.className = 'task-stat-bar';
     bar.style.width = `${Math.max(4, Math.round((row.minutes / max) * 100))}%`;
@@ -1336,7 +1319,7 @@ function downloadFile(filename, text, type) {
 
 document.getElementById('export-csv-link').addEventListener('click', (e) => {
   e.preventDefault();
-  downloadFile('pomodoro-sessions.csv', store.sessionsCsv(), 'text/csv;charset=utf-8');
+  downloadFile('focus-log-sessions.csv', store.sessionsCsv(), 'text/csv;charset=utf-8');
 });
 
 function renderChart(dailyData) {
@@ -1390,7 +1373,7 @@ const themeToggleBtn = document.getElementById('theme-toggle-btn');
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   themeToggleBtn.setAttribute('aria-pressed', String(theme === 'dark'));
-  try { localStorage.setItem('pomodoro-theme', theme); } catch (e) { /* ignore */ }
+  try { localStorage.setItem(UI_KEYS.theme, theme); } catch (e) { /* ignore */ }
 }
 
 themeToggleBtn.addEventListener('click', () => {
@@ -1531,8 +1514,8 @@ function setDataStatus(text, isError = false) {
 }
 
 document.getElementById('export-backup-btn').addEventListener('click', () => {
-  const day = window.PomodoroStore.localDayKey(new Date());
-  downloadFile(`pomodoro-backup-${day}.json`, JSON.stringify(store.exportBackup(), null, 2), 'application/json');
+  const day = window.FocusLogStore.localDayKey(new Date());
+  downloadFile(`focus-log-backup-${day}.json`, JSON.stringify(store.exportBackup(), null, 2), 'application/json');
   setDataStatus('Backup downloaded.');
 });
 
@@ -1547,7 +1530,7 @@ importBackupInputEl.addEventListener('change', async () => {
     try {
       data = JSON.parse(await file.text());
     } catch (e) {
-      throw new Error('This file is not a Pomodoro backup.');
+      throw new Error('This file is not a Focus Log backup.');
     }
     const added = store.importBackup(data);
     loadSettings();
@@ -1682,7 +1665,7 @@ function drawConfetti() {
 // ====================================================
 // Phone bottom tabs: Timer / Tasks / Stats (CSS ignores data-view from 720px up)
 // ====================================================
-const VIEW_KEY = 'pomodoro-view';
+const VIEW_KEY = UI_KEYS.view;
 const VIEWS = ['timer', 'tasks', 'stats'];
 const bottomNavBtns = document.querySelectorAll('.bottom-nav-btn');
 
@@ -1705,7 +1688,6 @@ bottomNavBtns.forEach((btn) => btn.addEventListener('click', () => setView(btn.d
   try { setView(localStorage.getItem(VIEW_KEY)); } catch (e) { setView('timer'); }
   try { setTaskView(localStorage.getItem(TASK_VIEW_KEY)); } catch (e) { setTaskView('list'); }
   try {
-    localStorage.removeItem('pomodoro-timer-state'); // the old countdown's saved state
     activeTaskId = localStorage.getItem(ACTIVE_TASK_KEY);
   } catch (e) { /* storage unavailable */ }
   // The task whose timer kept running while the page was closed is the focused one

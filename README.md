@@ -1,6 +1,8 @@
-# 🍅 Pomodoro Focus Dashboard
+# ⏱ Focus Log
 
-Zero-dependency static app: vanilla JS + `localStorage`. No backend — all data stays in the browser.
+A work and break clock with tasks on a priority matrix, story points and focus analytics. Zero-dependency static app: vanilla JS + `localStorage`. No backend, no account: all data stays in the browser.
+
+> Formerly *Pomodoro Focus Dashboard*. It no longer counts 25-minute pomodoros; the clock counts up and every task has its own stopwatch. Data saved under the old name is carried over automatically (see **Storage**).
 
 ```bash
 npm start                # any static server works; this one is http://localhost:8000
@@ -20,7 +22,7 @@ You can also just open `index.html` directly in a browser.
 | 🌗 Dark mode | toggle in top bar, saved |
 | 📊 Stats | local-time day buckets, streak, 7-day chart |
 | ✏️ Tasks | edit inline (pencil), reorder by dragging the handle or with ↑/↓ on it |
-| 🍅 Estimates | optional pomodoro estimate per task, shown as `done/estimate` |
+| 🎯 Story points | optional points per task; the daily points goal and stats use them |
 | 🗓 Heatmap | focus minutes per day for the last 12 weeks |
 | 📈 Focus by task | top tasks by focus time |
 | 📅 Weekly review | last 7 days vs the 7 before, best day, top task, longest streak |
@@ -34,10 +36,14 @@ You can also just open `index.html` directly in a browser.
 
 | Key | Contents |
 |---|---|
-| `pomodoro-tasks` | task list |
-| `pomodoro-sessions` | completed sessions (stats are computed from these) |
-| `pomodoro-settings` | timer preferences + theme |
-| `pomodoro-timer-state` | running timer snapshot (survives reload) |
+| `focuslog-tasks` | task list |
+| `focuslog-sessions` | completed sessions (stats are computed from these) |
+| `focuslog-settings` | clock preferences + goals |
+| `focuslog-task-clock`, `focuslog-work-state` | the running task clock and work/break stretch (survive reload) |
+| `focuslog-theme`, `focuslog-view`, `focuslog-task-view`, `focuslog-active-task` | small interface preferences |
+| `focuslog-migrated` | set once the old data has been carried over |
+
+**Coming from the old Pomodoro app?** On first load the `pomodoro-*` data is copied once to the keys above. The old keys are left untouched as a backup, new data always wins, and the copy never runs again, so deleting data later never brings the old copy back. Old tasks lose their pomodoro estimate (story points replaced it). Backup files exported before the rename still import.
 
 Data is per browser and per device; clearing site data deletes it. Use **Settings → Export backup** to keep a copy or move it to another device (import merges, so you can combine devices).
 
