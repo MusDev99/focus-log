@@ -153,6 +153,24 @@
     return link ? link.href : null;
   }
 
+  /**
+   * A trigger that runs `run` once, however many times it is called before `schedule` fires it. Used to draw work that
+   * is not what a tap changed (the stats) just after the frame, once, even if several changes arrive together.
+   * Pure: the scheduler is injected. Returns true when this call scheduled the run, false when one was already waiting.
+   */
+  function coalesce(run, schedule) {
+    let waiting = false;
+    return function trigger() {
+      if (waiting) return false;
+      waiting = true;
+      schedule(() => {
+        waiting = false; // cleared first, so a run that throws can still be scheduled again
+        run();
+      });
+      return true;
+    };
+  }
+
   // ---- Row swipe rules: when a touch is a swipe, how far the row follows, when letting go acts ----
   // Right = finish, left = more actions. A direction with no action resists instead of moving.
 
@@ -369,7 +387,7 @@
   return {
     heatLevel, heatmapCells, formatElapsed, shortUrl, taskTextParts, taskDisplayText, firstTaskLink,
     goalProgress, shortcutAction, sourceOfText, timeBySource, sizingCheck, sizingVerdictText, wipTasks,
-    lockAxis, swipeThreshold, swipePull, swipeArmed, swipeCommit,
+    lockAxis, swipeThreshold, swipePull, swipeArmed, swipeCommit, coalesce,
     FLOW_STEPS, FLOW_POINTS, MAX_TASK_TEXT, normalizeLink, composeTaskText, flowStepError, flowResult,
     MAX_JIRA_LENGTH, normalizeJiraBase, isJiraBase, setJiraBase,
   };

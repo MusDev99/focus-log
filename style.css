@@ -580,12 +580,14 @@ body {
   stroke: #ffffff;
 }
 
-.task-item.completed .task-checkbox-btn {
+.task-item.completed .task-checkbox-btn,
+.task-item.completing .task-checkbox-btn {
   background: var(--theme-accent);
   border-color: var(--theme-accent);
 }
 
-.task-item.completed .task-checkbox-btn svg {
+.task-item.completed .task-checkbox-btn svg,
+.task-item.completing .task-checkbox-btn svg {
   display: block;
 }
 
@@ -596,7 +598,8 @@ body {
   word-break: break-word;
 }
 
-.task-item.completed .task-text {
+.task-item.completed .task-text,
+.task-item.completing .task-text {
   text-decoration: line-through;
   color: var(--text-muted);
   opacity: 0.75;
@@ -2038,12 +2041,14 @@ button.heat-cell:hover { transform: scale(1.25); }
   stroke: transparent;
 }
 
-.matrix-chip.completed .matrix-check {
+.matrix-chip.completed .matrix-check,
+.matrix-chip.completing .matrix-check {
   background: var(--q, var(--theme-accent));
   border-color: transparent;
 }
 
-.matrix-chip.completed .matrix-check svg {
+.matrix-chip.completed .matrix-check svg,
+.matrix-chip.completing .matrix-check svg {
   stroke: #fff;
 }
 
@@ -2078,7 +2083,8 @@ button.heat-cell:hover { transform: scale(1.25); }
   overflow-wrap: anywhere;
 }
 
-.matrix-chip.completed .matrix-chip-text {
+.matrix-chip.completed .matrix-chip-text,
+.matrix-chip.completing .matrix-chip-text {
   text-decoration: line-through;
   color: var(--text-muted);
 }
