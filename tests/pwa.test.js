@@ -365,7 +365,7 @@ test('primary buttons use the on-accent colour, never white on the pastel accent
     assert.match(css, re);
   });
   // the new components take their muted text from the token that passes, not the app-wide grey
-  ['\\.flow-hint', '\\.flow-count', '\\.flow-card-hint', '\\.sheet-label', '\\.new-activity-sub'].forEach((sel) => {
+  ['\\.flow-hint', '\\.flow-count', '\\.flow-card-hint', '\\.sheet-label'].forEach((sel) => {
     assert.match(css, new RegExp(`${sel} \\{[^}]*color: var\\(--flow-muted\\)`), `${sel} uses --flow-muted`);
   });
 });

@@ -3101,12 +3101,6 @@ body[data-view="timer"] .done-card {
   color: var(--theme-accent);
 }
 
-.new-activity-sub {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--flow-muted);
-}
-
 /* One way to add per screen size: on a phone the guided flow is the only add, so the quick add row is hidden */
 @media (max-width: 600px) {
   .new-activity-btn {
