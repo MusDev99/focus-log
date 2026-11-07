@@ -4,7 +4,7 @@
 const store = window.FocusLogStore.createStore(window.localStorage); // also carries any old pomodoro-* data over, once
 const UI_KEYS = window.FocusLogStore.UI_KEYS;
 window.TimerCore.setJiraBase(store.getJiraBase()); // bare issue keys (SKYIQ-123) link to this Jira site, before anything is drawn
-const { heatLevel, heatmapCells, taskTextParts, taskDisplayText, firstTaskLink, formatElapsed, goalProgress, shortcutAction, timeBySource, sizingCheck, sizingVerdictText, wipTasks, lockAxis, swipePull, swipeArmed, swipeCommit } = window.TimerCore;
+const { heatLevel, heatmapCells, taskTextParts, taskDisplayText, firstTaskLink, formatElapsed, goalProgress, shortcutAction, timeBySource, sizingCheck, sizingVerdictText, wipTasks, lockAxis, swipePull, swipeArmed, swipeCommit, coalesce } = window.TimerCore;
 
 let config = {
   daily_goal: 4, // hours of work per day
