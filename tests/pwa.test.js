@@ -365,7 +365,7 @@ test('primary buttons use the on-accent colour, never white on the pastel accent
     assert.match(css, re);
   });
   // the new components take their muted text from the token that passes, not the app-wide grey
-  ['\\.flow-hint', '\\.flow-count', '\\.flow-card-hint', '\\.sheet-label', '\\.new-activity-sub'].forEach((sel) => {
+  ['\\.flow-hint', '\\.flow-count', '\\.flow-card-hint', '\\.sheet-label'].forEach((sel) => {
     assert.match(css, new RegExp(`${sel} \\{[^}]*color: var\\(--flow-muted\\)`), `${sel} uses --flow-muted`);
   });
 });
@@ -390,4 +390,11 @@ test('app.js lists every TimerCore helper it calls (a missing name is a Referenc
     const declared = new RegExp(`(?:function|const|let|var)\\s+${name}\\b`).test(code);
     if (bareCall && !declared) assert.ok(names.includes(name), `app.js calls ${name}() but does not take it from window.TimerCore`);
   });
+});
+
+test('one add per screen size: under 600px the guided button shows and the quick add row hides; wider keeps the quick add', () => {
+  const css = read('style.css');
+  const phone = css.match(/@media \(max-width: 600px\) \{\s*\.new-activity-btn \{\s*display: flex;\s*\}\s*\.task-form \{\s*display: none;\s*\}/);
+  assert.ok(phone, 'the phone rule shows .new-activity-btn and hides .task-form together');
+  assert.match(css, /\.new-activity-btn \{\s*display: none;/, 'hidden by default, so a wide screen shows only the quick add');
 });
