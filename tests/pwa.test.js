@@ -304,4 +304,72 @@ test('text colours of the Jira site setting keep 4.5:1 in light and dark, includ
   });
   assert.ok(ratio('#c53030', themes.light['--surface']) >= 4.5, 'the error red on the light card');
   assert.ok(ratio('#ff9b9b', themes.dark['--surface']) >= 4.5, 'the lighter error red on the dark card');
+// ---- colour contrast of the new activity flow, sheet and primary buttons (WCAG AA: 4.5:1 for text) ----
+
+/** Hex colour tokens from style.css: light = everything outside the dark blocks; dark = the dark blocks laid over light. */
+function colourTokens() {
+  const css = read('style.css');
+  const darkBlocks = [...css.matchAll(/:root\[data-theme="dark"\] \{([^}]*)\}/g)].map((m) => m[1]).join('\n');
+  const lightCss = css.replace(/:root\[data-theme="dark"\] \{[^}]*\}/g, '');
+  const grab = (text) => Object.fromEntries([...text.matchAll(/(--[\w-]+):\s*(#[0-9a-fA-F]{6})\b/g)].map((m) => [m[1], m[2]]));
+  const light = grab(lightCss);
+  return { light, dark: { ...light, ...grab(darkBlocks) } };
+}
+
+function luminance(hex) {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+const contrast = (a, b) => {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+};
+
+test('the on-accent text colour reads on both accents, in light and dark', () => {
+  const { light, dark } = colourTokens();
+  [['light', light], ['dark', dark]].forEach(([name, t]) => {
+    ['--accent-focus', '--accent-short'].forEach((accent) => {
+      const ratio = contrast(t['--on-accent'], t[accent]);
+      assert.ok(ratio >= 4.5, `${name}: --on-accent on ${accent} is ${ratio.toFixed(2)}:1`);
+    });
+  });
+});
+
+test('the flow muted text colour reads on every surface the flow and sheet put it on', () => {
+  const { light, dark } = colourTokens();
+  [['light', light], ['dark', dark]].forEach(([name, t]) => {
+    ['--surface', '--surface-muted', '--accent-focus-light', '--accent-short-light'].forEach((surface) => {
+      const ratio = contrast(t['--flow-muted'], t[surface]);
+      assert.ok(ratio >= 4.5, `${name}: --flow-muted on ${surface} is ${ratio.toFixed(2)}:1`);
+    });
+  });
+});
+
+test('error and delete text reads on the dialog surfaces in light and dark', () => {
+  const { light, dark } = colourTokens();
+  [['light', light], ['dark', dark]].forEach(([name, t]) => {
+    ['--surface', '--surface-muted'].forEach((surface) => {
+      const ratio = contrast(t['--danger-text'], t[surface]);
+      assert.ok(ratio >= 4.5, `${name}: --danger-text on ${surface} is ${ratio.toFixed(2)}:1`);
+    });
+  });
+});
+
+test('primary buttons use the on-accent colour, never white on the pastel accent', () => {
+  const css = read('style.css');
+  [/\.task-add-btn \{[^}]*color: var\(--on-accent\)/, /\.flow-next \{[^}]*color: var\(--on-accent\)/, /\.sheet-chip\[aria-pressed="true"\] \{[^}]*color: var\(--on-accent\)/].forEach((re) => {
+    assert.match(css, re);
+  });
+  // the new components take their muted text from the token that passes, not the app-wide grey
+  ['\\.flow-hint', '\\.flow-count', '\\.flow-card-hint', '\\.sheet-label', '\\.new-activity-sub'].forEach((sel) => {
+    assert.match(css, new RegExp(`${sel} \\{[^}]*color: var\\(--flow-muted\\)`), `${sel} uses --flow-muted`);
+  });
+});
+
+test('the contrast helper itself is right (known ratios)', () => {
+  assert.ok(Math.abs(contrast('#000000', '#ffffff') - 21) < 0.01);
+  assert.ok(Math.abs(contrast('#777777', '#ffffff') - 4.48) < 0.02);
+  assert.equal(contrast('#336699', '#336699'), 1);
 });
