@@ -3077,13 +3077,13 @@ body[data-view="timer"] .done-card {
 
 /* ---- New activity: one question per screen ---- */
 .new-activity-btn {
-  display: none; /* phones only; the quick add form is enough on a wide screen */
+  display: none; /* phones only; a wide screen has the quick add form instead */
   align-items: center;
   justify-content: center;
   gap: 8px;
   width: 100%;
   min-height: 48px;
-  margin: -4px 0 14px;
+  margin: 0 0 14px;
   padding: 0 14px;
   border: 1.5px solid var(--theme-accent);
   border-radius: 14px;
@@ -3107,9 +3107,14 @@ body[data-view="timer"] .done-card {
   color: var(--flow-muted);
 }
 
+/* One way to add per screen size: on a phone the guided flow is the only add, so the quick add row is hidden */
 @media (max-width: 600px) {
   .new-activity-btn {
     display: flex;
+  }
+
+  .task-form {
+    display: none;
   }
 }
 

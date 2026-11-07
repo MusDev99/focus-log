@@ -391,3 +391,10 @@ test('app.js lists every TimerCore helper it calls (a missing name is a Referenc
     if (bareCall && !declared) assert.ok(names.includes(name), `app.js calls ${name}() but does not take it from window.TimerCore`);
   });
 });
+
+test('one add per screen size: under 600px the guided button shows and the quick add row hides; wider keeps the quick add', () => {
+  const css = read('style.css');
+  const phone = css.match(/@media \(max-width: 600px\) \{\s*\.new-activity-btn \{\s*display: flex;\s*\}\s*\.task-form \{\s*display: none;\s*\}/);
+  assert.ok(phone, 'the phone rule shows .new-activity-btn and hides .task-form together');
+  assert.match(css, /\.new-activity-btn \{\s*display: none;/, 'hidden by default, so a wide screen shows only the quick add');
+});
