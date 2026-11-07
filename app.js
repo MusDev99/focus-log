@@ -3,6 +3,7 @@
 
 const store = window.FocusLogStore.createStore(window.localStorage); // also carries any old pomodoro-* data over, once
 const UI_KEYS = window.FocusLogStore.UI_KEYS;
+window.TimerCore.setJiraBase(store.getJiraBase()); // bare issue keys (SKYIQ-123) link to this Jira site, before anything is drawn
 const { heatLevel, heatmapCells, taskTextParts, taskDisplayText, firstTaskLink, formatElapsed, goalProgress, shortcutAction, timeBySource, sizingCheck, sizingVerdictText, wipTasks, lockAxis, swipePull, swipeArmed, swipeCommit } = window.TimerCore;
 
 let config = {
@@ -1659,6 +1660,12 @@ const settingGoalInput = document.getElementById('setting-goal');
 const settingPointsGoalInput = document.getElementById('setting-points-goal');
 const settingSoundInput = document.getElementById('setting-sound');
 const settingCharacterInput = document.getElementById('setting-character');
+const settingJiraInput = document.getElementById('setting-jira');
+const settingJiraError = document.getElementById('setting-jira-error');
+settingJiraInput.addEventListener('input', () => {
+  settingJiraError.hidden = true;
+  settingJiraInput.removeAttribute('aria-invalid');
+});
 
 let lastFocusedBeforeModal = null;
 
@@ -1705,6 +1712,9 @@ function fillSettingsForm() {
   settingPointsGoalInput.value = config.daily_points_goal;
   settingSoundInput.checked = Boolean(config.cat_sound);
   settingCharacterInput.value = config.character;
+  settingJiraInput.value = store.getJiraBase();
+  settingJiraError.hidden = true;
+  settingJiraInput.removeAttribute('aria-invalid');
 }
 
 function loadSettings() {
@@ -1717,6 +1727,15 @@ function loadSettings() {
 
 settingsForm.addEventListener('submit', (e) => {
   e.preventDefault();
+  // The Jira site is checked first: a bad address keeps the dialog open and says why
+  const jira = window.TimerCore.normalizeJiraBase(settingJiraInput.value);
+  if (jira === null) {
+    settingJiraError.hidden = false;
+    settingJiraInput.setAttribute('aria-invalid', 'true');
+    settingJiraInput.focus();
+    return;
+  }
+  const jiraChanged = jira !== store.getJiraBase();
   const updated = {
     daily_goal: parseInt(settingGoalInput.value, 10),
     daily_points_goal: parseInt(settingPointsGoalInput.value, 10),
@@ -1725,6 +1744,11 @@ settingsForm.addEventListener('submit', (e) => {
   };
 
   config = { ...config, ...store.saveSettings(updated) };
+  if (jiraChanged) {
+    window.TimerCore.setJiraBase(store.saveJiraBase(jira));
+    fetchTasks(); // keys in task titles turn into links (or back into text) at once
+    loadStats();
+  }
   closeSettings();
   applyCharacter();
   renderGoal();
@@ -1797,6 +1821,7 @@ importBackupInputEl.addEventListener('change', async () => {
       throw new Error('This file is not a Focus Log backup.');
     }
     const added = store.importBackup(data);
+    window.TimerCore.setJiraBase(store.getJiraBase());
     loadSettings();
     fetchTasks();
     loadStats();

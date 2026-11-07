@@ -3396,3 +3396,51 @@ body[data-view="timer"] .done-card {
     transition: none;
   }
 }
+
+/* ---- Jira site setting: a full-width text field with a hint and an inline error ---- */
+.setting-item.setting-stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.setting-item.setting-stack input {
+  width: 100%;
+  text-align: left;
+  font-weight: 500;
+}
+
+.setting-item.setting-stack input[aria-invalid="true"] {
+  border-color: #c53030;
+}
+
+/* The browser's default placeholder grey is 4.2:1 in light and 2.3:1 in dark */
+.setting-item.setting-stack input::placeholder {
+  color: var(--text-main);
+  opacity: 0.78;
+}
+
+.setting-hint {
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--text-main);
+  opacity: 0.75; /* about 5:1 on the card in light and dark, unlike the app's muted grey */
+}
+
+.setting-error {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #c53030;
+}
+
+.setting-error[hidden] {
+  display: none;
+}
+
+:root[data-theme="dark"] .setting-error {
+  color: #ff9b9b;
+}
+
+:root[data-theme="dark"] .setting-item.setting-stack input[aria-invalid="true"] {
+  border-color: #ff9b9b;
+}

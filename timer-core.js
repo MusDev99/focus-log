@@ -66,11 +66,68 @@
     return label.length > max ? label.slice(0, max - 1) + '…' : label;
   }
 
+  // ---- Jira site: a bare issue key like SKYIQ-10143 in a task links to your Jira ----
+
+  const MAX_JIRA_LENGTH = 200;
+
+  /**
+   * "airasia.atlassian.net" or "https://airasia.atlassian.net/jira/..." -> "https://airasia.atlassian.net".
+   * '' for blank (clears it); null when it cannot be a Jira site (not https, a login in the URL, no dotted host).
+   */
+  function normalizeJiraBase(input) {
+    const text = String(input == null ? '' : input).trim();
+    if (text === '') return '';
+    if (text.length > MAX_JIRA_LENGTH) return null;
+    let url;
+    try {
+      url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `https://${text}`);
+    } catch (e) {
+      return null;
+    }
+    if (url.protocol !== 'https:' || url.username !== '' || url.password !== '' || !url.hostname.includes('.')) return null;
+    return url.origin;
+  }
+
+  /** The stored form: '' (none) or an https origin exactly as normalizeJiraBase writes it. */
+  const isJiraBase = (value) => typeof value === 'string' && (value === '' || normalizeJiraBase(value) === value);
+
+  /** The Jira site bare keys link to, or null. Set once at start-up (and when Settings changes it); tests pass a base instead. */
+  let currentJiraBase = null;
+  function setJiraBase(base) {
+    currentJiraBase = typeof base === 'string' && isJiraBase(base) && base !== '' ? base : null;
+  }
+
+  /** A Jira issue key on its own: 2-10 capitals/digits, a dash, 1-6 digits. The prefix group stops it matching inside words, paths or other keys (no lookbehind: older iPhones lack it). */
+  const KEY_RE = /(^|[^A-Za-z0-9_/.-])([A-Z][A-Z0-9]{1,9}-\d{1,6})(?![A-Za-z0-9_-])/g;
+  /** Look like issue keys but are not (standards, encodings): never linked. */
+  const NOT_JIRA = new Set(['UTF', 'ISO', 'SHA', 'MD', 'AES', 'RSA', 'TLS', 'SSL', 'RFC', 'CVE', 'COVID', 'HTTP', 'PDF', 'USB', 'GPT', 'CRC', 'TCP', 'UDP', 'IPV', 'WPA', 'ES', 'MP']);
+
+  function expandKeys(text, base) {
+    const out = [];
+    let last = 0;
+    for (const m of text.matchAll(KEY_RE)) {
+      const key = m[2];
+      if (NOT_JIRA.has(key.slice(0, key.indexOf('-')))) continue;
+      const at = m.index + m[1].length;
+      if (at > last) out.push({ type: 'text', value: text.slice(last, at) });
+      out.push({ type: 'link', href: `${base}/browse/${key}`, label: key });
+      last = at + key.length;
+    }
+    if (last < text.length) out.push({ type: 'text', value: text.slice(last) });
+    return out;
+  }
+
   /**
    * Split task text into plain text and links, for rendering without innerHTML:
-   * [{type:'text', value}, {type:'link', href, label}]. Only http(s) links are produced.
+   * [{type:'text', value}, {type:'link', href, label}]. Only http(s) links are produced; with a Jira site set,
+   * bare issue keys link to it too.
    */
-  function taskTextParts(text) {
+  function taskTextParts(text, base = currentJiraBase) {
+    const parts = urlParts(String(text));
+    return base ? parts.flatMap((p) => (p.type === 'text' ? expandKeys(p.value, base) : [p])) : parts;
+  }
+
+  function urlParts(text) {
     const parts = [];
     let last = 0;
     String(text).replace(URL_RE, (match, offset) => {
@@ -86,13 +143,13 @@
   }
 
   /** Task text with links shortened, for places that show plain text (pill, stats, toasts). */
-  function taskDisplayText(text) {
-    return taskTextParts(text).map(p => (p.type === 'link' ? p.label : p.value)).join('');
+  function taskDisplayText(text, base = currentJiraBase) {
+    return taskTextParts(text, base).map(p => (p.type === 'link' ? p.label : p.value)).join('');
   }
 
   /** First link in the task text, or null. */
-  function firstTaskLink(text) {
-    const link = taskTextParts(text).find(p => p.type === 'link');
+  function firstTaskLink(text, base = currentJiraBase) {
+    const link = taskTextParts(text, base).find(p => p.type === 'link');
     return link ? link.href : null;
   }
 
@@ -148,8 +205,8 @@
    * Where a task's work lives, from the first link in its text: a Jira ticket (by key), a GitHub repo
    * (PRs and issues of one repo group together) or a site. null when the text has no link.
    */
-  function sourceOfText(text) {
-    const href = firstTaskLink(text);
+  function sourceOfText(text, base = currentJiraBase) {
+    const href = firstTaskLink(text, base);
     if (!href) return null;
     let url;
     try {
@@ -314,5 +371,6 @@
     goalProgress, shortcutAction, sourceOfText, timeBySource, sizingCheck, sizingVerdictText, wipTasks,
     lockAxis, swipeThreshold, swipePull, swipeArmed, swipeCommit,
     FLOW_STEPS, FLOW_POINTS, MAX_TASK_TEXT, normalizeLink, composeTaskText, flowStepError, flowResult,
+    MAX_JIRA_LENGTH, normalizeJiraBase, isJiraBase, setJiraBase,
   };
 });

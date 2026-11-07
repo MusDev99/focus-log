@@ -261,3 +261,47 @@ test('validate.sh checks flow.js too', () => {
   assert.match(script, /for f in [^;]*flow\.js/);
   assert.match(script, /-- store\.js timer-core\.js app\.js flow\.js/);
 });
+
+// ---- Jira site setting ----
+
+test('Settings has a Jira site field with a hint and an inline error, wired to the store and the link rules', () => {
+  const html = read('index.html');
+  ['setting-jira', 'setting-jira-hint', 'setting-jira-error'].forEach((id) => assert.match(html, new RegExp(`id="${id}"`), `${id} exists`));
+  assert.match(html, /id="setting-jira-error"[^>]*role="alert"/);
+  assert.match(html, /id="setting-jira"[^>]*aria-describedby="setting-jira-hint setting-jira-error"/);
+  const app = read('app.js');
+  // the site is set before anything is drawn, and checked before it is saved
+  assert.ok(app.indexOf('window.TimerCore.setJiraBase(store.getJiraBase())') > -1 && app.indexOf('window.TimerCore.setJiraBase(store.getJiraBase())') < app.indexOf('function renderTasks'), 'set before the first render');
+  assert.match(app, /window\.TimerCore\.normalizeJiraBase\(settingJiraInput\.value\)/);
+  assert.match(app, /if \(jira === null\) \{[\s\S]*settingJiraError\.hidden = false;[\s\S]*return;/, 'a bad address keeps the dialog open');
+  assert.match(app, /store\.saveJiraBase\(jira\)/);
+  assert.match(app, /store\.importBackup\(data\);\s*window\.TimerCore\.setJiraBase\(store\.getJiraBase\(\)\)/, 'restoring a backup applies its Jira site');
+});
+
+test('text colours of the Jira site setting keep 4.5:1 in light and dark, including opacity', () => {
+  // Self-contained on purpose: the helpers are scoped to this test so nothing here depends on, or collides with, other files' helpers.
+  const css = read('style.css');
+  const dark = [...css.matchAll(/:root\[data-theme="dark"\] \{([^}]*)\}/g)].map((m) => m[1]).join('\n');
+  const grab = (text) => Object.fromEntries([...text.matchAll(/(--[\w-]+):\s*(#[0-9a-fA-F]{6})\b/g)].map((m) => [m[1], m[2]]));
+  const light = grab(css.replace(/:root\[data-theme="dark"\] \{[^}]*\}/g, ''));
+  const themes = { light, dark: { ...light, ...grab(dark) } };
+  const channel = (hex, i) => parseInt(hex.slice(i, i + 2), 16);
+  const lum = (hex) => {
+    const [r, g, b] = [1, 3, 5].map((i) => channel(hex, i) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const ratio = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
+  const over = (fg, alpha, bg) => '#' + [1, 3, 5].map((i) => Math.round(channel(fg, i) * alpha + channel(bg, i) * (1 - alpha)).toString(16).padStart(2, '0')).join('');
+
+  assert.ok(Math.abs(ratio('#000000', '#ffffff') - 21) < 0.01, 'the helper is right');
+  const hintOpacity = Number(css.match(/\.setting-hint \{[^}]*opacity: ([\d.]+)/)[1]);
+  const placeholderOpacity = Number(css.match(/\.setting-stack input::placeholder \{[^}]*opacity: ([\d.]+)/)[1]);
+  Object.entries(themes).forEach(([name, t]) => {
+    const hint = ratio(over(t['--text-main'], hintOpacity, t['--surface']), t['--surface']);
+    assert.ok(hint >= 4.5, `${name}: the hint is ${hint.toFixed(2)}:1`);
+    const placeholder = ratio(over(t['--text-main'], placeholderOpacity, t['--surface-muted']), t['--surface-muted']);
+    assert.ok(placeholder >= 4.5, `${name}: the placeholder is ${placeholder.toFixed(2)}:1`);
+  });
+  assert.ok(ratio('#c53030', themes.light['--surface']) >= 4.5, 'the error red on the light card');
+  assert.ok(ratio('#ff9b9b', themes.dark['--surface']) >= 4.5, 'the lighter error red on the dark card');
+});

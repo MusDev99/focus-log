@@ -653,3 +653,47 @@ test('a stored task or session that is not an object is skipped, not a crash', (
   assert.equal(store.exportBackup().tasks.length, 1);
   assert.equal(store.exportBackup().sessions.length, 1);
 });
+
+// ---- the Jira site (bare issue keys link to it) ----
+
+test('the Jira site: none by default, saved as a plain https origin, anything else saves as none', () => {
+  const { store } = makeStore();
+  assert.equal(store.getJiraBase(), '');
+  assert.equal(store.saveJiraBase('https://airasia.atlassian.net'), 'https://airasia.atlassian.net');
+  assert.equal(store.getJiraBase(), 'https://airasia.atlassian.net');
+  assert.equal(store.saveJiraBase('https://jira.example.com:8443'), 'https://jira.example.com:8443');
+  for (const bad of ['http://airasia.atlassian.net', 'javascript:alert(1)', 'airasia.atlassian.net', 'https://airasia.atlassian.net/browse', 'https://user:pw@x.example.com', 'https://localhost', 42, null, 'https://' + 'a'.repeat(200) + '.com']) {
+    store.saveJiraBase('https://airasia.atlassian.net');
+    assert.equal(store.saveJiraBase(bad), '', String(bad));
+    assert.equal(store.getJiraBase(), '', `${String(bad)} cleared it`);
+  }
+});
+
+test('a hand-edited unsafe Jira value in storage reads as none, and corrupt JSON never crashes', () => {
+  const { store, storage } = makeStore();
+  storage.setItem(S.KEYS.jira, JSON.stringify('javascript:alert(1)'));
+  assert.equal(store.getJiraBase(), '');
+  storage.setItem(S.KEYS.jira, '{not json');
+  assert.equal(store.getJiraBase(), '');
+  storage.setItem(S.KEYS.jira, JSON.stringify({ evil: true }));
+  assert.equal(store.getJiraBase(), '');
+});
+
+test('the Jira site travels in a backup; an older backup, or an unsafe value in a file, leaves it alone', () => {
+  const { store } = makeStore();
+  store.saveJiraBase('https://airasia.atlassian.net');
+  const backup = JSON.parse(JSON.stringify(store.exportBackup()));
+  assert.equal(backup.jira_base, 'https://airasia.atlassian.net');
+
+  const other = makeStore().store;
+  other.importBackup(backup);
+  assert.equal(other.getJiraBase(), 'https://airasia.atlassian.net');
+
+  const keeps = makeStore().store;
+  keeps.saveJiraBase('https://mine.atlassian.net');
+  const { jira_base, ...oldBackup } = backup; // a backup made before this existed
+  keeps.importBackup(oldBackup);
+  assert.equal(keeps.getJiraBase(), 'https://mine.atlassian.net', 'an old backup does not clear it');
+  keeps.importBackup({ ...backup, jira_base: 'javascript:alert(1)' });
+  assert.equal(keeps.getJiraBase(), 'https://mine.atlassian.net', 'an unsafe value in a file is ignored');
+});
