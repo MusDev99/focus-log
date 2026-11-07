@@ -7,7 +7,7 @@
     root.FocusLogStore = factory();
   }
 })(typeof self !== 'undefined' ? self : this, function () {
-  const KEYS = { tasks: 'focuslog-tasks', sessions: 'focuslog-sessions', settings: 'focuslog-settings', clock: 'focuslog-task-clock', work: 'focuslog-work-state' };
+  const KEYS = { tasks: 'focuslog-tasks', sessions: 'focuslog-sessions', settings: 'focuslog-settings', clock: 'focuslog-task-clock', work: 'focuslog-work-state', jira: 'focuslog-jira' };
   /** The app's small UI preferences (raw strings, written by app.js and the page's theme script). */
   const UI_KEYS = { theme: 'focuslog-theme', activeTask: 'focuslog-active-task', taskView: 'focuslog-task-view', view: 'focuslog-view' };
   /** What every key was called before the app was renamed (it used to be a Pomodoro timer). */
@@ -145,6 +145,15 @@
 
   /** Eisenhower/Covey quadrant: 1 urgent+important, 2 important, 3 urgent, 4 neither; null = not sorted yet. */
   const cleanQuadrant = (q) => (Number.isInteger(q) && q >= 1 && q <= 4 ? q : null);
+  /**
+   * The Jira site bare issue keys link to: '' (none) or a plain https origin. Anything else (hand-edited storage,
+   * a backup from elsewhere) reads as none, so an unsafe value can never become a link base.
+   */
+  function cleanJiraBase(value) {
+    if (typeof value !== 'string' || value.length > 200) return '';
+    return /^https:\/\/[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:\d{1,5})?$/i.test(value) && value.includes('.') ? value : '';
+  }
+
   /** Tasks saved by older versions carry a pomodoro `estimate`; it is dropped on read (story points replaced it). */
   const dropEstimate = (t) => {
     if (!t || typeof t !== 'object' || !('estimate' in t)) return t;
@@ -234,6 +243,16 @@
 
     // A stored entry that is not an object (hand-edited or corrupt data) is skipped here, so nothing downstream can trip over it.
     const isRecord = (x) => x !== null && typeof x === 'object';
+    /** The saved Jira site ('' when none). */
+    const getJiraBase = () => cleanJiraBase(read(KEYS.jira, ''));
+
+    /** Save the Jira site; an unusable value saves as none. Returns what was kept. */
+    function saveJiraBase(value) {
+      const clean = cleanJiraBase(value);
+      write(KEYS.jira, clean);
+      return clean;
+    }
+
     const rawTasks = () => readList(KEYS.tasks).filter(isRecord).map(dropEstimate);
     const rawSessions = () => readList(KEYS.sessions).filter(isRecord);
     const focusSessions = () => rawSessions().filter((s) => s.mode === 'focus');
@@ -469,7 +488,7 @@
     function exportBackup() {
       return {
         app: BACKUP_APP, version: BACKUP_VERSION, exported_at: now().toISOString(),
-        settings: getSettings(), tasks: rawTasks(), sessions: rawSessions(),
+        settings: getSettings(), tasks: rawTasks(), sessions: rawSessions(), jira_base: getJiraBase(),
       };
     }
 
@@ -497,6 +516,9 @@
       write(KEYS.sessions, sessions.concat(newSessions)
         .sort((a, b) => Date.parse(a.completed_at) - Date.parse(b.completed_at)));
       saveSettings(data.settings);
+      // Older backups have no Jira site; a usable one in the file is kept
+      const jira = cleanJiraBase(data.jira_base);
+      if (jira) saveJiraBase(jira);
       return { tasks: newTasks.length, sessions: newSessions.length };
     }
 
@@ -728,7 +750,7 @@
     }
 
     return {
-      getSettings, saveSettings, listTasks, addTask, updateTask, deleteTask, restoreTask, reorderTasks,
+      getJiraBase, saveJiraBase, getSettings, saveSettings, listTasks, addTask, updateTask, deleteTask, restoreTask, reorderTasks,
       listFocusSessions, startTaskClock, pauseTaskClock, runningTaskId, taskElapsedMs, getWorkState, setWorkMode, todayTotals, resetToday, logSession, summary, pointsSummary, taskStats, heatmap, dayDetail, weeklyReview, sessionsCsv, exportBackup, importBackup,
     };
   }

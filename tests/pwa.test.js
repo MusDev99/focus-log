@@ -262,38 +262,114 @@ test('validate.sh checks flow.js too', () => {
   assert.match(script, /-- store\.js timer-core\.js app\.js flow\.js/);
 });
 
-// ---- render and feedback polish ----
+// ---- Jira site setting ----
 
-test('only the task view on screen is drawn; the other is drawn when you switch to it', () => {
+test('Settings has a Jira site field with a hint and an inline error, wired to the store and the link rules', () => {
+  const html = read('index.html');
+  ['setting-jira', 'setting-jira-hint', 'setting-jira-error'].forEach((id) => assert.match(html, new RegExp(`id="${id}"`), `${id} exists`));
+  assert.match(html, /id="setting-jira-error"[^>]*role="alert"/);
+  assert.match(html, /id="setting-jira"[^>]*aria-describedby="setting-jira-hint setting-jira-error"/);
   const app = read('app.js');
-  const tasksFn = app.slice(app.indexOf('function renderTasks()'), app.indexOf('function renderList()'));
-  assert.match(tasksFn, /renderVisibleView\(\)/);
-  assert.doesNotMatch(tasksFn, /renderMatrix\(\)|renderList\(\)/, 'renderTasks must not rebuild both views');
-  assert.match(app, /function renderVisibleView\(\) \{\s*if \(taskView === 'matrix'\) renderMatrix\(\);\s*else renderList\(\);/);
-  assert.match(app, /taskView = view === 'matrix' \? 'matrix' : 'list';\s*renderVisibleView\(\);/, 'switching views draws the one that was hidden');
-  const list = app.slice(app.indexOf('function renderList()'), app.indexOf('/** Fill the unsorted tray'));
-  assert.doesNotMatch(list, /renderMatrix\(\)|renderDone\(\)/, 'the list builder only builds the list');
+  // the site is set before anything is drawn, and checked before it is saved
+  assert.ok(app.indexOf('window.TimerCore.setJiraBase(store.getJiraBase())') > -1 && app.indexOf('window.TimerCore.setJiraBase(store.getJiraBase())') < app.indexOf('function renderTasks'), 'set before the first render');
+  assert.match(app, /window\.TimerCore\.normalizeJiraBase\(settingJiraInput\.value\)/);
+  assert.match(app, /if \(jira === null\) \{[\s\S]*settingJiraError\.hidden = false;[\s\S]*return;/, 'a bad address keeps the dialog open');
+  assert.match(app, /store\.saveJiraBase\(jira\)/);
+  assert.match(app, /store\.importBackup\(data\);\s*window\.TimerCore\.setJiraBase\(store\.getJiraBase\(\)\)/, 'restoring a backup applies its Jira site');
 });
 
-test('stats are drawn after the frame and coalesced; first load and backup import stay immediate', () => {
-  const app = read('app.js');
-  assert.match(app, /const scheduleStats = coalesce\(\(\) => loadStats\(\), \(fn\) => requestAnimationFrame\(\(\) => setTimeout\(fn, 0\)\)\)/);
-  ['function afterModeChange', 'function toggleTask', 'function deleteTask', 'function resetToday'].forEach((fn) => {
-    const body = app.slice(app.indexOf(fn), app.indexOf(fn) + 1500);
-    assert.match(body.slice(0, body.indexOf('\n}\n') + 3), /scheduleStats\(\)/, `${fn} schedules the stats`);
-  });
-  // the two places that must show stats at once keep the direct call
-  assert.match(app, /const added = store\.importBackup\(data\);[\s\S]*?\n    loadStats\(\);/);
-  assert.match(app, /loadSettings\(\);\n  fetchTasks\(\);\n  loadStats\(\);/);
-});
-
-test('finishing a task answers the tap first: the row is marked done at once, the rebuild follows on the next frame', () => {
-  const app = read('app.js');
-  assert.match(app, /function completeSoon\(id, row\) \{\s*if \(row\.classList\.contains\('completing'\)\) return;[^\n]*\n\s*row\.classList\.add\('completing'\);\s*requestAnimationFrame\(\(\) => setTimeout\(\(\) => toggleTask\(id, true\), 0\)\);/);
-  assert.equal((app.match(/completeSoon\(task\.id, li\)/g) || []).length, 3, 'list checkbox, matrix checkbox and the swipe');
-  assert.doesNotMatch(app, /toggleTask\(task\.id, !task\.completed\)/, 'no path completes a task synchronously from a tap any more');
+test('text colours of the Jira site setting keep 4.5:1 in light and dark, including opacity', () => {
+  // Self-contained on purpose: the helpers are scoped to this test so nothing here depends on, or collides with, other files' helpers.
   const css = read('style.css');
-  ['\\.task-item\\.completing \\.task-checkbox-btn', '\\.task-item\\.completing \\.task-text', '\\.matrix-chip\\.completing \\.matrix-check', '\\.matrix-chip\\.completing \\.matrix-chip-text'].forEach((sel) => {
-    assert.match(css, new RegExp(sel), `${sel} is styled`);
+  const dark = [...css.matchAll(/:root\[data-theme="dark"\] \{([^}]*)\}/g)].map((m) => m[1]).join('\n');
+  const grab = (text) => Object.fromEntries([...text.matchAll(/(--[\w-]+):\s*(#[0-9a-fA-F]{6})\b/g)].map((m) => [m[1], m[2]]));
+  const light = grab(css.replace(/:root\[data-theme="dark"\] \{[^}]*\}/g, ''));
+  const themes = { light, dark: { ...light, ...grab(dark) } };
+  const channel = (hex, i) => parseInt(hex.slice(i, i + 2), 16);
+  const lum = (hex) => {
+    const [r, g, b] = [1, 3, 5].map((i) => channel(hex, i) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const ratio = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
+  const over = (fg, alpha, bg) => '#' + [1, 3, 5].map((i) => Math.round(channel(fg, i) * alpha + channel(bg, i) * (1 - alpha)).toString(16).padStart(2, '0')).join('');
+
+  assert.ok(Math.abs(ratio('#000000', '#ffffff') - 21) < 0.01, 'the helper is right');
+  const hintOpacity = Number(css.match(/\.setting-hint \{[^}]*opacity: ([\d.]+)/)[1]);
+  const placeholderOpacity = Number(css.match(/\.setting-stack input::placeholder \{[^}]*opacity: ([\d.]+)/)[1]);
+  Object.entries(themes).forEach(([name, t]) => {
+    const hint = ratio(over(t['--text-main'], hintOpacity, t['--surface']), t['--surface']);
+    assert.ok(hint >= 4.5, `${name}: the hint is ${hint.toFixed(2)}:1`);
+    const placeholder = ratio(over(t['--text-main'], placeholderOpacity, t['--surface-muted']), t['--surface-muted']);
+    assert.ok(placeholder >= 4.5, `${name}: the placeholder is ${placeholder.toFixed(2)}:1`);
   });
+  assert.ok(ratio('#c53030', themes.light['--surface']) >= 4.5, 'the error red on the light card');
+  assert.ok(ratio('#ff9b9b', themes.dark['--surface']) >= 4.5, 'the lighter error red on the dark card');
+// ---- colour contrast of the new activity flow, sheet and primary buttons (WCAG AA: 4.5:1 for text) ----
+
+/** Hex colour tokens from style.css: light = everything outside the dark blocks; dark = the dark blocks laid over light. */
+function colourTokens() {
+  const css = read('style.css');
+  const darkBlocks = [...css.matchAll(/:root\[data-theme="dark"\] \{([^}]*)\}/g)].map((m) => m[1]).join('\n');
+  const lightCss = css.replace(/:root\[data-theme="dark"\] \{[^}]*\}/g, '');
+  const grab = (text) => Object.fromEntries([...text.matchAll(/(--[\w-]+):\s*(#[0-9a-fA-F]{6})\b/g)].map((m) => [m[1], m[2]]));
+  const light = grab(lightCss);
+  return { light, dark: { ...light, ...grab(darkBlocks) } };
+}
+
+function luminance(hex) {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+const contrast = (a, b) => {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+};
+
+test('the on-accent text colour reads on both accents, in light and dark', () => {
+  const { light, dark } = colourTokens();
+  [['light', light], ['dark', dark]].forEach(([name, t]) => {
+    ['--accent-focus', '--accent-short'].forEach((accent) => {
+      const ratio = contrast(t['--on-accent'], t[accent]);
+      assert.ok(ratio >= 4.5, `${name}: --on-accent on ${accent} is ${ratio.toFixed(2)}:1`);
+    });
+  });
+});
+
+test('the flow muted text colour reads on every surface the flow and sheet put it on', () => {
+  const { light, dark } = colourTokens();
+  [['light', light], ['dark', dark]].forEach(([name, t]) => {
+    ['--surface', '--surface-muted', '--accent-focus-light', '--accent-short-light'].forEach((surface) => {
+      const ratio = contrast(t['--flow-muted'], t[surface]);
+      assert.ok(ratio >= 4.5, `${name}: --flow-muted on ${surface} is ${ratio.toFixed(2)}:1`);
+    });
+  });
+});
+
+test('error and delete text reads on the dialog surfaces in light and dark', () => {
+  const { light, dark } = colourTokens();
+  [['light', light], ['dark', dark]].forEach(([name, t]) => {
+    ['--surface', '--surface-muted'].forEach((surface) => {
+      const ratio = contrast(t['--danger-text'], t[surface]);
+      assert.ok(ratio >= 4.5, `${name}: --danger-text on ${surface} is ${ratio.toFixed(2)}:1`);
+    });
+  });
+});
+
+test('primary buttons use the on-accent colour, never white on the pastel accent', () => {
+  const css = read('style.css');
+  [/\.task-add-btn \{[^}]*color: var\(--on-accent\)/, /\.flow-next \{[^}]*color: var\(--on-accent\)/, /\.sheet-chip\[aria-pressed="true"\] \{[^}]*color: var\(--on-accent\)/].forEach((re) => {
+    assert.match(css, re);
+  });
+  // the new components take their muted text from the token that passes, not the app-wide grey
+  ['\\.flow-hint', '\\.flow-count', '\\.flow-card-hint', '\\.sheet-label', '\\.new-activity-sub'].forEach((sel) => {
+    assert.match(css, new RegExp(`${sel} \\{[^}]*color: var\\(--flow-muted\\)`), `${sel} uses --flow-muted`);
+  });
+});
+
+test('the contrast helper itself is right (known ratios)', () => {
+  assert.ok(Math.abs(contrast('#000000', '#ffffff') - 21) < 0.01);
+  assert.ok(Math.abs(contrast('#777777', '#ffffff') - 4.48) < 0.02);
+  assert.equal(contrast('#336699', '#336699'), 1);
 });

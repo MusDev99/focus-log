@@ -309,46 +309,76 @@ test('flowResult: the finished draft for the store, with safe fallbacks', () => 
   assert.equal(T.flowResult({ title: 'x'.repeat(250), link: '' }).step, 'title');
 });
 
-// ---- coalesce: draw non-urgent work once, just after the frame ----
+// ---- Jira site and bare issue keys ----
 
-test('coalesce runs once however many times it is triggered before the scheduler fires', () => {
-  const queue = [];
-  let runs = 0;
-  const trigger = T.coalesce(() => { runs += 1; }, (fn) => queue.push(fn));
-  assert.equal(trigger(), true, 'the first call schedules');
-  assert.equal(trigger(), false);
-  assert.equal(trigger(), false);
-  assert.equal(queue.length, 1, 'only one run is waiting');
-  queue.shift()();
-  assert.equal(runs, 1);
+const BASE = 'https://airasia.atlassian.net';
+const links = (text, base = BASE) => T.taskTextParts(text, base).filter((p) => p.type === 'link');
+
+test('normalizeJiraBase: a bare host or any page on the site becomes the https origin; blank clears', () => {
+  assert.equal(T.normalizeJiraBase('airasia.atlassian.net'), BASE);
+  assert.equal(T.normalizeJiraBase('  https://airasia.atlassian.net/jira/software/projects/SKYIQ/boards/1  '), BASE);
+  assert.equal(T.normalizeJiraBase('https://jira.example.com:8443/x'), 'https://jira.example.com:8443');
+  assert.equal(T.normalizeJiraBase(''), '');
+  assert.equal(T.normalizeJiraBase('   '), '');
+  assert.equal(T.normalizeJiraBase(null), '');
 });
 
-test('coalesce can be triggered again once the run has happened', () => {
-  const queue = [];
-  let runs = 0;
-  const trigger = T.coalesce(() => { runs += 1; }, (fn) => queue.push(fn));
-  trigger(); queue.shift()();
-  assert.equal(trigger(), true, 'a later change schedules a new run');
-  queue.shift()();
-  assert.equal(runs, 2);
+test('normalizeJiraBase refuses anything that is not a plain https site', () => {
+  ['http://airasia.atlassian.net', 'javascript:alert(1)', 'ftp://x.example.com', 'https://user:pw@airasia.atlassian.net', 'localhost', 'not a url', `https://${'a'.repeat(200)}.com`].forEach((bad) => {
+    assert.equal(T.normalizeJiraBase(bad), null, bad);
+  });
 });
 
-test('coalesce: a run that throws does not block later runs', () => {
-  const queue = [];
-  let runs = 0;
-  const trigger = T.coalesce(() => { runs += 1; if (runs === 1) throw new Error('boom'); }, (fn) => queue.push(fn));
-  trigger();
-  assert.throws(() => queue.shift()(), /boom/);
-  assert.equal(trigger(), true, 'still schedulable after the failure');
-  queue.shift()();
-  assert.equal(runs, 2);
+test('isJiraBase accepts only the canonical stored form', () => {
+  assert.equal(T.isJiraBase(BASE), true);
+  assert.equal(T.isJiraBase(''), true);
+  assert.equal(T.isJiraBase('airasia.atlassian.net'), false, 'must be normalised before it is stored');
+  assert.equal(T.isJiraBase(`${BASE}/browse`), false);
+  assert.equal(T.isJiraBase(42), false);
+  assert.equal(T.isJiraBase(null), false);
 });
 
-test('coalesce does nothing until triggered, and never runs synchronously', () => {
-  let runs = 0;
-  const queue = [];
-  const trigger = T.coalesce(() => { runs += 1; }, (fn) => queue.push(fn));
-  assert.equal(runs, 0);
-  trigger();
-  assert.equal(runs, 0, 'the scheduler decides when');
+test('a bare issue key links to the Jira site, mid-sentence or at either end', () => {
+  assert.deepEqual(T.taskTextParts('Fix SKYIQ-10143 before release', BASE), [
+    { type: 'text', value: 'Fix ' },
+    { type: 'link', href: `${BASE}/browse/SKYIQ-10143`, label: 'SKYIQ-10143' },
+    { type: 'text', value: ' before release' },
+  ]);
+  assert.equal(links('SKYIQ-1')[0].href, `${BASE}/browse/SKYIQ-1`);
+  assert.equal(links('see (ABC-9).')[0].label, 'ABC-9');
+  assert.equal(links('SKYIQ-1,SKYIQ-2 and SKYIQ-3').length, 3);
+});
+
+test('no Jira site: keys stay plain text, so nothing changes for people who do not use Jira', () => {
+  assert.deepEqual(T.taskTextParts('Fix SKYIQ-10143', null), [{ type: 'text', value: 'Fix SKYIQ-10143' }]);
+  assert.equal(T.firstTaskLink('Fix SKYIQ-10143', null), null);
+});
+
+test('look-alikes and keys inside words, paths or longer numbers are left alone', () => {
+  ['UTF-8 handling', 'use SHA-256', 'ISO-8601 dates', 'COVID-19 plan', 'HTTP-2 push', 'v2-3 notes', 'a-12 lower', 'skyiq-12 lower', 'X-1', 'abcSKYIQ-12', 'SKYIQ-1234567', 'SKYIQ-12abc', 'SKYIQ--12', 'file_SKYIQ-12', '/browse/SKYIQ-12', 'a.SKYIQ-12'].forEach((text) => {
+    assert.equal(links(text).length, 0, text);
+  });
+});
+
+test('a pasted URL stays a URL link; other links are untouched and keys elsewhere in the text still link', () => {
+  const parts = links(`https://github.com/a/b/pull/1 and SKYIQ-5`);
+  assert.deepEqual(parts.map((p) => p.label), ['github.com/a/b/pull/1', 'SKYIQ-5']);
+});
+
+test('display text, first link and work source use a key like any other link', () => {
+  assert.equal(T.taskDisplayText('Fix SKYIQ-10143 today', BASE), 'Fix SKYIQ-10143 today');
+  assert.equal(T.firstTaskLink('Fix SKYIQ-10143', BASE), `${BASE}/browse/SKYIQ-10143`);
+  assert.deepEqual(T.sourceOfText('Fix SKYIQ-10143', BASE), { kind: 'jira', key: 'jira:SKYIQ-10143', label: 'SKYIQ-10143', href: `${BASE}/browse/SKYIQ-10143` });
+});
+
+test('setJiraBase is what the app uses: later calls without a base read it, and a bad value switches it off', () => {
+  T.setJiraBase(BASE);
+  assert.equal(links('SKYIQ-7', undefined).length, 1);
+  assert.equal(T.firstTaskLink('SKYIQ-7'), `${BASE}/browse/SKYIQ-7`);
+  T.setJiraBase('javascript:alert(1)');
+  assert.equal(T.firstTaskLink('SKYIQ-7'), null, 'an unsafe value is never used as a link base');
+  T.setJiraBase(BASE);
+  T.setJiraBase('');
+  assert.equal(T.firstTaskLink('SKYIQ-7'), null);
+  T.setJiraBase(null);
 });

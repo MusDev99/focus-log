@@ -508,7 +508,7 @@ body {
 
 .task-add-btn {
   background: var(--theme-accent);
-  color: #ffffff;
+  color: var(--on-accent);
   border: none;
   border-radius: 14px;
   width: 40px;
@@ -3001,7 +3001,7 @@ body[data-view="timer"] .done-card {
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--flow-muted);
 }
 
 .sheet-chips {
@@ -3030,7 +3030,7 @@ body[data-view="timer"] .done-card {
 
 .sheet-chip[aria-pressed="true"] {
   background: var(--theme-accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .sheet-chip:hover,
@@ -3053,7 +3053,7 @@ body[data-view="timer"] .done-card {
 }
 
 .sheet-danger {
-  color: #c53030;
+  color: var(--danger-text);
 }
 
 /* Wide screens: a centred card instead of a sheet from the bottom edge */
@@ -3104,7 +3104,7 @@ body[data-view="timer"] .done-card {
 .new-activity-sub {
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--flow-muted);
 }
 
 @media (max-width: 600px) {
@@ -3173,7 +3173,7 @@ body[data-view="timer"] .done-card {
   font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.04em;
-  color: var(--text-muted);
+  color: var(--flow-muted);
 }
 
 .flow-progress {
@@ -3227,7 +3227,7 @@ body[data-view="timer"] .done-card {
 .flow-hint {
   margin: 8px 0 0;
   font-size: 0.95rem;
-  color: var(--text-muted);
+  color: var(--flow-muted);
 }
 
 .flow-field {
@@ -3247,6 +3247,11 @@ body[data-view="timer"] .done-card {
   outline: none;
 }
 
+.flow-input::placeholder {
+  color: var(--flow-muted);
+  opacity: 1;
+}
+
 .flow-input:focus {
   border-color: var(--theme-accent);
   box-shadow: 0 0 0 4px var(--theme-accent-light);
@@ -3257,7 +3262,7 @@ body[data-view="timer"] .done-card {
   margin: 12px 4px 0;
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--flow-muted);
 }
 
 .flow-preview.ok {
@@ -3306,7 +3311,7 @@ body[data-view="timer"] .done-card {
 
 .flow-card-hint {
   font-size: 0.85rem;
-  color: var(--text-muted);
+  color: var(--flow-muted);
 }
 
 .flow-chip[aria-pressed="true"],
@@ -3317,14 +3322,14 @@ body[data-view="timer"] .done-card {
 }
 
 .flow-chip[aria-pressed="true"] {
-  color: var(--theme-accent);
+  color: var(--text-main);
 }
 
 .flow-error {
   margin: 14px 2px 0;
   font-size: 0.92rem;
   font-weight: 600;
-  color: #c53030;
+  color: var(--danger-text);
 }
 
 .flow-error[hidden] {
@@ -3365,7 +3370,7 @@ body[data-view="timer"] .done-card {
   border: 0;
   border-radius: 16px;
   background: var(--theme-accent);
-  color: #fff;
+  color: var(--on-accent);
   font: inherit;
   font-size: 1.05rem;
   font-weight: 800;
@@ -3401,4 +3406,63 @@ body[data-view="timer"] .done-card {
   .flow-progress span {
     transition: none;
   }
+}
+
+/* ---- Jira site setting: a full-width text field with a hint and an inline error ---- */
+.setting-item.setting-stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.setting-item.setting-stack input {
+  width: 100%;
+  text-align: left;
+  font-weight: 500;
+}
+
+.setting-item.setting-stack input[aria-invalid="true"] {
+  border-color: #c53030;
+}
+
+/* The browser's default placeholder grey is 4.2:1 in light and 2.3:1 in dark */
+.setting-item.setting-stack input::placeholder {
+  color: var(--text-main);
+  opacity: 0.78;
+}
+
+.setting-hint {
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--text-main);
+  opacity: 0.75; /* about 5:1 on the card in light and dark, unlike the app's muted grey */
+}
+
+.setting-error {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #c53030;
+}
+
+.setting-error[hidden] {
+  display: none;
+}
+
+:root[data-theme="dark"] .setting-error {
+  color: #ff9b9b;
+}
+
+:root[data-theme="dark"] .setting-item.setting-stack input[aria-invalid="true"] {
+  border-color: #ff9b9b;
+/* Text colours that keep 4.5:1 on the accent and on every surface, in light and dark.
+   (White on the pastel accent is only about 2.3:1; the app's muted grey is 3.6:1 on light surfaces.) */
+:root {
+  --on-accent: #1f2933;
+  --flow-muted: #56616c;
+  --danger-text: #c53030;
+}
+
+:root[data-theme="dark"] {
+  --flow-muted: #aab3c2;
+  --danger-text: #ff9b9b;
 }
