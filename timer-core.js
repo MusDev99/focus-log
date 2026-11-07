@@ -247,9 +247,72 @@
     return tasks.filter((t) => t.completed !== true && (t.running === true || t.elapsed_ms > 0));
   }
 
+  // ---- New activity flow: one question per screen (the rules; the screens are in flow.js) ----
+
+  /** Longest task text the store keeps (store.js MAX_TASK_LENGTH); a title plus its link must fit. */
+  const MAX_TASK_TEXT = 200;
+  const FLOW_POINTS = [1, 2, 3, 5, 8, 13, 21];
+
+  /** The steps in order. Only the title is required; every other step can be skipped. */
+  const FLOW_STEPS = [
+    { id: 'title', question: 'What are you working on?', hint: 'A few words is enough.', skippable: false },
+    { id: 'link', question: 'Is there a ticket or pull request?', hint: 'Paste a Jira or GitHub link, or skip.', skippable: true },
+    { id: 'size', question: 'How big is it?', hint: 'Story points. Skip if you are not sure yet.', skippable: true },
+    { id: 'priority', question: 'Where does it belong?', hint: 'Pick a spot on your priority matrix, or decide later.', skippable: true },
+  ];
+
+  /** The link field as {ok, href}. Blank is fine (no link); an http(s):// or www. address is kept as typed; anything else is not a link. */
+  function normalizeLink(input) {
+    const raw = String(input == null ? '' : input).trim();
+    if (!raw) return { ok: true, href: '' };
+    const href = /^www\./i.test(raw) ? `https://${raw}` : raw;
+    if (/\s/.test(href) || !/^https?:\/\//i.test(href)) return { ok: false, href: '' };
+    try {
+      return new URL(href).hostname.includes('.') ? { ok: true, href } : { ok: false, href: '' };
+    } catch (e) {
+      return { ok: false, href: '' };
+    }
+  }
+
+  /** The task text from a title and an optional link, or {error} the flow can show (empty title, or too long together). */
+  function composeTaskText(title, href, max = MAX_TASK_TEXT) {
+    const t = String(title == null ? '' : title).replace(/\s+/g, ' ').trim();
+    if (!t) return { text: '', error: 'Give the activity a name.' };
+    const text = href ? `${t} ${href}` : t;
+    if (text.length > max) return { text: '', error: `That is ${text.length - max} characters too long. Shorten the title${href ? ' or the link' : ''}.` };
+    return { text, error: '' };
+  }
+
+  /** Why a step cannot move on yet, or '' when it can. `draft` = {title, link, points, quadrant}. */
+  function flowStepError(stepId, draft) {
+    if (stepId === 'title') return composeTaskText(draft.title, '').error;
+    if (stepId === 'link') {
+      const link = normalizeLink(draft.link);
+      if (!link.ok) return 'That does not look like a link. Start it with https:// or skip this step.';
+      return composeTaskText(draft.title, link.href).error;
+    }
+    return '';
+  }
+
+  /** The finished draft as {text, points, quadrant} for the store, or {error, step} naming the step to fix. Unknown points or quadrants fall back to none. */
+  function flowResult(draft) {
+    const link = normalizeLink(draft.link);
+    if (!link.ok) return { error: flowStepError('link', draft), step: 'link' };
+    const composed = composeTaskText(draft.title, link.href);
+    if (composed.error) return { error: composed.error, step: 'title' }; // the title is the step that is always there to shorten
+    return {
+      text: composed.text,
+      points: FLOW_POINTS.includes(draft.points) ? draft.points : 0,
+      quadrant: [1, 2, 3, 4].includes(draft.quadrant) ? draft.quadrant : null,
+      error: '',
+      step: null,
+    };
+  }
+
   return {
     heatLevel, heatmapCells, formatElapsed, shortUrl, taskTextParts, taskDisplayText, firstTaskLink,
     goalProgress, shortcutAction, sourceOfText, timeBySource, sizingCheck, sizingVerdictText, wipTasks,
     lockAxis, swipeThreshold, swipePull, swipeArmed, swipeCommit,
+    FLOW_STEPS, FLOW_POINTS, MAX_TASK_TEXT, normalizeLink, composeTaskText, flowStepError, flowResult,
   };
 });

@@ -3068,3 +3068,331 @@ body[data-view="timer"] .done-card {
     transition: none;
   }
 }
+
+/* ---- New activity: one question per screen ---- */
+.new-activity-btn {
+  display: none; /* phones only; the quick add form is enough on a wide screen */
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 48px;
+  margin: -4px 0 14px;
+  padding: 0 14px;
+  border: 1.5px solid var(--theme-accent);
+  border-radius: 14px;
+  background: var(--theme-accent-light);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.new-activity-btn svg {
+  width: 18px;
+  height: 18px;
+  color: var(--theme-accent);
+}
+
+.new-activity-sub {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+@media (max-width: 600px) {
+  .new-activity-btn {
+    display: flex;
+  }
+}
+
+.flow {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: var(--surface);
+  color: var(--text-main);
+}
+
+.flow[open] {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+
+.flow::backdrop {
+  background: rgba(20, 20, 30, 0.45);
+}
+
+.flow-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(8px + env(safe-area-inset-top)) 8px 0;
+}
+
+/* The browser's default tap highlight is a square blue box that ignores rounded corners */
+.flow button {
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.flow-icon-btn {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.flow-icon-btn:hover {
+  background: var(--surface-muted);
+}
+
+.flow-icon-btn svg {
+  width: 22px;
+  height: 22px;
+}
+
+.flow-count {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.flow-progress {
+  display: flex;
+  gap: 6px;
+  padding: 4px 20px 0;
+}
+
+.flow-progress span {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-muted-hover);
+  transition: background 0.25s ease;
+}
+
+.flow-progress span.done {
+  background: var(--theme-accent);
+}
+
+.flow-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px 20px 16px;
+}
+
+.flow-body.from-right {
+  animation: flow-in-right 0.28s ease-out both;
+}
+
+.flow-body.from-left {
+  animation: flow-in-left 0.28s ease-out both;
+}
+
+@keyframes flow-in-right {
+  from { opacity: 0; transform: translateX(28px); }
+}
+
+@keyframes flow-in-left {
+  from { opacity: 0; transform: translateX(-28px); }
+}
+
+.flow-question {
+  margin: 0;
+  font-size: 1.7rem;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.flow-hint {
+  margin: 8px 0 0;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+}
+
+.flow-field {
+  margin-top: 26px;
+}
+
+.flow-input {
+  width: 100%;
+  min-height: 58px;
+  padding: 0 16px;
+  border: 1.5px solid var(--card-border);
+  border-radius: 16px;
+  background: var(--surface-muted);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 1.15rem;
+  outline: none;
+}
+
+.flow-input:focus {
+  border-color: var(--theme-accent);
+  box-shadow: 0 0 0 4px var(--theme-accent-light);
+}
+
+.flow-preview {
+  min-height: 1.4em;
+  margin: 12px 4px 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.flow-preview.ok {
+  color: var(--text-main);
+}
+
+.flow-choices {
+  display: grid;
+  gap: 10px;
+}
+
+.flow-sizes {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.flow-chip,
+.flow-card {
+  border: 1.5px solid var(--card-border);
+  background: var(--surface-muted);
+  color: var(--text-main);
+  font: inherit;
+  cursor: pointer;
+}
+
+.flow-chip {
+  min-height: 64px;
+  border-radius: 16px;
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+
+.flow-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 68px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  text-align: left;
+}
+
+.flow-card-name {
+  font-size: 1.02rem;
+  font-weight: 800;
+}
+
+.flow-card-hint {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.flow-chip[aria-pressed="true"],
+.flow-card[aria-pressed="true"] {
+  border-color: var(--theme-accent);
+  background: var(--theme-accent-light);
+  box-shadow: 0 0 0 3px var(--theme-accent-light);
+}
+
+.flow-chip[aria-pressed="true"] {
+  color: var(--theme-accent);
+}
+
+.flow-error {
+  margin: 14px 2px 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #c53030;
+}
+
+.flow-error[hidden] {
+  display: none;
+}
+
+.flow-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px calc(14px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--surface-muted-hover);
+}
+
+.flow-skip {
+  min-height: 52px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text-main);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.flow-skip[hidden] {
+  display: none;
+}
+
+.flow-next {
+  margin-left: auto;
+  min-height: 54px;
+  min-width: 140px;
+  padding: 0 28px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--theme-accent);
+  color: #fff;
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.flow-next:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Wide screens: a centred card instead of a full screen */
+@media (min-width: 601px) {
+  .flow {
+    margin: auto;
+    width: 480px;
+    height: auto;
+    border-radius: 24px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+  }
+
+  .flow[open] {
+    height: min(640px, 90dvh);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-body.from-right,
+  .flow-body.from-left {
+    animation: none;
+  }
+
+  .flow-progress span {
+    transition: none;
+  }
+}

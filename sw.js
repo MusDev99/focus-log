@@ -1,11 +1,12 @@
 // Service worker: caches the app shell so the dashboard opens offline.
 // Paths are relative to this file so it also works under a subpath (e.g. GitHub Pages).
-const CACHE = 'focuslog-shell-v18';
+const CACHE = 'focuslog-shell-v19';
 const SHELL = [
   './',
   './index.html',
   './style.css',
   './app.js',
+  './flow.js',
   './audio.js',
   './sounds/meow.mp3',
   './sounds/yay.mp3',

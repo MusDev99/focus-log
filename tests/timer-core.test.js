@@ -244,3 +244,67 @@ test('sizingVerdictText: nothing, tracks, or drifts with the right article', () 
   assert.match(T.sizingVerdictText({ verdict: 'drifts', example: [13, 21] }), /^A 21 SP task/);
   assert.equal(T.sizingVerdictText({ verdict: 'drifts', example: null }), '', 'a drift without a pair says nothing');
 });
+
+// ---- new activity flow ----
+
+test('FLOW_STEPS: title, link, size, priority in that order; only the title is required', () => {
+  assert.deepEqual(T.FLOW_STEPS.map((x) => x.id), ['title', 'link', 'size', 'priority']);
+  assert.deepEqual(T.FLOW_STEPS.map((x) => x.skippable), [false, true, true, true]);
+  T.FLOW_STEPS.forEach((x) => assert.ok(x.question.length > 0 && x.hint.length > 0));
+});
+
+test('normalizeLink: blank is fine, http(s) and www. links are kept, everything else is refused', () => {
+  assert.deepEqual(T.normalizeLink(''), { ok: true, href: '' });
+  assert.deepEqual(T.normalizeLink('   '), { ok: true, href: '' });
+  assert.deepEqual(T.normalizeLink(null), { ok: true, href: '' });
+  assert.deepEqual(T.normalizeLink(' https://airasia.atlassian.net/browse/SKYIQ-1 '), { ok: true, href: 'https://airasia.atlassian.net/browse/SKYIQ-1' });
+  assert.deepEqual(T.normalizeLink('http://example.com/a'), { ok: true, href: 'http://example.com/a' });
+  assert.deepEqual(T.normalizeLink('www.example.com/a'), { ok: true, href: 'https://www.example.com/a' });
+  ['example.com', 'ftp://example.com', 'javascript:alert(1)', 'https://', 'https://localhost', 'https://exa mple.com', 'not a link', 'data:text/html,hi'].forEach((bad) => {
+    assert.equal(T.normalizeLink(bad).ok, false, bad);
+    assert.equal(T.normalizeLink(bad).href, '');
+  });
+});
+
+test('composeTaskText: tidies the title, appends the link, and refuses empty or too-long text', () => {
+  assert.deepEqual(T.composeTaskText('  Fix   the seat   map ', ''), { text: 'Fix the seat map', error: '' });
+  assert.deepEqual(T.composeTaskText('Fix it', 'https://x.example.com/1'), { text: 'Fix it https://x.example.com/1', error: '' });
+  assert.match(T.composeTaskText('   ', '').error, /name/);
+  assert.match(T.composeTaskText(null, '').error, /name/);
+  const long = T.composeTaskText('x'.repeat(190), 'https://example.com/12345');
+  assert.equal(long.text, '');
+  assert.match(long.error, /\d+ characters too long.*title or the link/);
+  assert.match(T.composeTaskText('x'.repeat(201), '').error, /1 characters too long\. Shorten the title\.$/);
+  assert.equal(T.composeTaskText('x'.repeat(200), '').error, '', 'exactly the limit is fine');
+});
+
+test('flowStepError: the title is required, a bad link blocks the link step, other steps never block', () => {
+  assert.match(T.flowStepError('title', { title: '' }), /name/);
+  assert.equal(T.flowStepError('title', { title: 'Ok' }), '');
+  assert.equal(T.flowStepError('link', { title: 'Ok', link: '' }), '');
+  assert.equal(T.flowStepError('link', { title: 'Ok', link: 'https://example.com/a' }), '');
+  assert.match(T.flowStepError('link', { title: 'Ok', link: 'example' }), /does not look like a link/);
+  assert.match(T.flowStepError('link', { title: 'x'.repeat(199), link: 'https://example.com/a' }), /too long/);
+  assert.equal(T.flowStepError('size', { title: '', points: 99 }), '');
+  assert.equal(T.flowStepError('priority', { title: '', quadrant: 7 }), '');
+});
+
+test('flowResult: the finished draft for the store, with safe fallbacks', () => {
+  assert.deepEqual(T.flowResult({ title: ' Fix it ', link: 'https://example.com/a', points: 5, quadrant: 2 }),
+    { text: 'Fix it https://example.com/a', points: 5, quadrant: 2, error: '', step: null });
+  assert.deepEqual(T.flowResult({ title: 'Plain', link: '', points: 0, quadrant: null }),
+    { text: 'Plain', points: 0, quadrant: null, error: '', step: null });
+  const odd = T.flowResult({ title: 'Plain', link: '', points: 4, quadrant: 9 });
+  assert.equal(odd.points, 0, 'a size that is not a story point value is dropped');
+  assert.equal(odd.quadrant, null, 'a quadrant that does not exist is dropped');
+  const noTitle = T.flowResult({ title: '  ', link: '', points: 3, quadrant: 1 });
+  assert.equal(noTitle.step, 'title');
+  assert.match(noTitle.error, /name/);
+  const badLink = T.flowResult({ title: 'Ok', link: 'nope', points: 3, quadrant: 1 });
+  assert.equal(badLink.step, 'link');
+  assert.equal(badLink.text, undefined);
+  const tooLong = T.flowResult({ title: 'x'.repeat(199), link: 'https://example.com/a' });
+  assert.equal(tooLong.step, 'title', 'too long together: send them back to the title, which is always there to shorten');
+  assert.match(tooLong.error, /too long/);
+  assert.equal(T.flowResult({ title: 'x'.repeat(250), link: '' }).step, 'title');
+});

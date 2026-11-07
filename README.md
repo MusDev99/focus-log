@@ -22,6 +22,7 @@ You can also just open `index.html` directly in a browser.
 | 🌗 Dark mode | toggle in top bar, saved |
 | 📊 Stats | local-time day buckets, streak, 7-day chart |
 | ✏️ Tasks | reorder by dragging the handle or with ↑/↓ on it; edit, move, story points and delete are in one bottom sheet behind each task's ⋯ |
+| ➕ New activity | on a phone, a **New activity** button opens a guided flow, one question per screen with a progress bar: what you are working on, a Jira or GitHub link (with a live check that it was recognised), a story-point size, and a spot on the priority matrix. Only the title is required; every other step has Skip, Back keeps your choices, and the quick add field above stays for fast capture |
 | 👆 Swipe | on a touch screen, swipe a task right to finish it or left to open its sheet (vertical scroll and pinch zoom are untouched; a long-press still drags a matrix chip, and a mouse drags as before). Every action keeps a button, so the swipe is only a shortcut |
 | 🎯 Story points | optional points per task; the daily points goal and stats use them |
 | 🧑‍💻 Developer view | Stats card: focus time by Jira ticket or GitHub repo (from the first link in each task, last 7 days), a sizing check (average time per story-point size over 4 weeks, and whether bigger sizes really take longer), and a warning when 3 or more tasks are started but not finished |
