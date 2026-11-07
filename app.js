@@ -3,7 +3,7 @@
 
 const store = window.FocusLogStore.createStore(window.localStorage); // also carries any old pomodoro-* data over, once
 const UI_KEYS = window.FocusLogStore.UI_KEYS;
-const { heatLevel, heatmapCells, taskTextParts, taskDisplayText, firstTaskLink, formatElapsed, goalProgress, shortcutAction, timeBySource, sizingCheck, sizingVerdictText, wipTasks, lockAxis, swipePull, swipeArmed, swipeCommit } = window.TimerCore;
+const { heatLevel, heatmapCells, taskTextParts, taskDisplayText, firstTaskLink, formatElapsed, goalProgress, shortcutAction, timeBySource, sizingCheck, sizingVerdictText, wipTasks, lockAxis, swipePull, swipeArmed, swipeCommit, coalesce } = window.TimerCore;
 
 let config = {
   daily_goal: 4, // hours of work per day
@@ -131,6 +131,9 @@ function saveActiveTask() {
 }
 
 /** Refresh everything that depends on the mode or on a stretch having just been logged. */
+/** The stats are not what a tap changes on screen: draw them just after the frame, once, however many changes arrive together. */
+const scheduleStats = coalesce(() => loadStats(), (fn) => requestAnimationFrame(() => setTimeout(fn, 0)));
+
 function afterModeChange() {
   const before = workMode;
   workMode = store.getWorkState().mode;
@@ -139,7 +142,7 @@ function afterModeChange() {
   applyWorkUi();
   saveActiveTask();
   fetchTasks();
-  loadStats();
+  scheduleStats();
   updateClock();
 }
 
@@ -204,7 +207,7 @@ function resetToday() {
   goalReachedDay = null;
   closeResetModal();
   fetchTasks();
-  loadStats();
+  scheduleStats();
   updateClock();
   showToast("Today's counters reset");
 }
@@ -285,6 +288,7 @@ let taskView = 'list';
 
 function setTaskView(view) {
   taskView = view === 'matrix' ? 'matrix' : 'list';
+  renderVisibleView(); // the other view is drawn only when you switch to it
   taskViewBtns.forEach(btn => btn.setAttribute('aria-pressed', String(btn.dataset.taskView === taskView)));
   taskListEl.hidden = taskView !== 'list';
   taskMatrixEl.hidden = taskView !== 'matrix';
@@ -292,6 +296,30 @@ function setTaskView(view) {
 }
 
 taskViewBtns.forEach(btn => btn.addEventListener('click', () => setTaskView(btn.dataset.taskView)));
+
+// Icons are parsed once and cloned. Parsing an SVG string for every control of every row was two thirds of a list
+// rebuild (600 parses for 100 tasks, measured); cloning a parsed copy costs a fraction of that.
+const ICONS = {
+  handle: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>',
+  tick: '<svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>',
+  more: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>',
+  play: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>',
+  link: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7"></path><path d="M10 14 21 3"></path><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"></path></svg>',
+  cross: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>',
+};
+const iconTemplates = new Map();
+
+/** A fresh copy of an icon from its SVG markup (the markup is parsed the first time only). */
+function icon(markup) {
+  let template = iconTemplates.get(markup);
+  if (!template) {
+    template = document.createElement('template');
+    template.innerHTML = markup;
+    iconTemplates.set(markup, template);
+  }
+  return template.content.cloneNode(true);
+}
 
 function fetchTasks() {
   tasks = store.listTasks();
@@ -386,7 +414,7 @@ function renderDone() {
     remove.type = 'button';
     remove.className = 'task-delete-btn done-delete-btn';
     remove.setAttribute('aria-label', `Delete "${shown}"`);
-    remove.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+    remove.appendChild(icon(ICONS.cross));
     remove.addEventListener('click', () => deleteTask(task.id));
 
     li.append(main, restore, remove);
@@ -396,7 +424,19 @@ function renderDone() {
   doneEmptyEl.classList.toggle('visible', done.length === 0);
 }
 
+/** Draw only the task view that is on screen; the list and the matrix each cost a full rebuild. */
+function renderVisibleView() {
+  if (taskView === 'matrix') renderMatrix();
+  else renderList();
+}
+
 function renderTasks() {
+  renderVisibleView();
+  renderDone();
+  updateTaskCounter();
+}
+
+function renderList() {
   taskListEl.innerHTML = '';
 
   tasks.filter(t => !t.completed).forEach((task) => {
@@ -409,13 +449,7 @@ function renderTasks() {
     handle.className = 'task-drag-handle';
     handle.type = 'button';
     handle.setAttribute('aria-label', `Reorder "${taskDisplayText(task.text)}" (drag, or use arrow keys)`);
-    handle.innerHTML = `
-      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/>
-        <circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/>
-        <circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/>
-      </svg>
-    `;
+    handle.appendChild(icon(ICONS.handle));
     handle.addEventListener('pointerdown', (e) => startTaskDrag(e, li));
     handle.addEventListener('keydown', (e) => {
       if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
@@ -428,19 +462,14 @@ function renderTasks() {
     checkBtn.className = 'task-checkbox-btn';
     checkBtn.type = 'button';
     checkBtn.setAttribute('aria-label', task.completed ? 'Mark incomplete' : 'Mark complete');
-    checkBtn.innerHTML = `
-      <svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="20 6 9 17 4 12"></polyline>
-      </svg>
-    `;
+    checkBtn.appendChild(icon(ICONS.tick));
     checkBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (!task.completed) {
-        const r = checkBtn.getBoundingClientRect();
-        celebrate('tiny', r.left + r.width / 2, r.top + r.height / 2);
-        buzz(15);
-      }
-      toggleTask(task.id, !task.completed);
+      if (task.completed) return toggleTask(task.id, false);
+      const r = checkBtn.getBoundingClientRect();
+      celebrate('tiny', r.left + r.width / 2, r.top + r.height / 2);
+      buzz(15);
+      completeSoon(task.id, li);
     });
 
     // Task text
@@ -455,7 +484,7 @@ function renderTasks() {
     moreBtn.type = 'button';
     moreBtn.setAttribute('aria-label', `More actions for "${taskDisplayText(task.text)}"`);
     moreBtn.setAttribute('aria-haspopup', 'dialog');
-    moreBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>';
+    moreBtn.appendChild(icon(ICONS.more));
     moreBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       openTaskSheet(task);
@@ -501,9 +530,7 @@ function renderTasks() {
       const shown = taskDisplayText(task.text);
       clockBtn.setAttribute('aria-label', task.running ? `Pause timer for "${shown}"` : `Start timer for "${shown}"`);
       clockBtn.title = task.running ? 'Pause this task\'s timer' : 'Start this task\'s timer';
-      clockBtn.innerHTML = task.running
-        ? '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>'
-        : '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+      clockBtn.appendChild(icon(task.running ? ICONS.pause : ICONS.play));
       clockBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         selectActiveTask(task);
@@ -514,10 +541,6 @@ function renderTasks() {
     attachSwipe(li, task);
     taskListEl.appendChild(li);
   });
-
-  renderMatrix();
-  renderDone();
-  updateTaskCounter();
 }
 
 /** Fill the unsorted tray and the four quadrants; tasks keep their list order inside each. */
@@ -550,15 +573,14 @@ function buildMatrixChip(task) {
   check.className = 'matrix-check';
   const shown = taskDisplayText(task.text);
   check.setAttribute('aria-label', task.completed ? `Mark "${shown}" incomplete` : `Mark "${shown}" complete`);
-  check.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+  check.appendChild(icon(ICONS.tick));
   check.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (!task.completed) {
-      const r = check.getBoundingClientRect();
-      celebrate('tiny', r.left + r.width / 2, r.top + r.height / 2);
-      buzz(15);
-    }
-    toggleTask(task.id, !task.completed);
+    if (task.completed) return toggleTask(task.id, false);
+    const r = check.getBoundingClientRect();
+    celebrate('tiny', r.left + r.width / 2, r.top + r.height / 2);
+    buzz(15);
+    completeSoon(task.id, li);
   });
 
   const body = document.createElement('button');
@@ -601,7 +623,7 @@ function buildMatrixChip(task) {
   moreBtn.className = 'matrix-chip-more';
   moreBtn.setAttribute('aria-label', `More actions for "${shown}"`);
   moreBtn.setAttribute('aria-haspopup', 'dialog');
-  moreBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>';
+  moreBtn.appendChild(icon(ICONS.more));
   moreBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
   moreBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -618,7 +640,7 @@ function buildMatrixChip(task) {
     link.rel = 'noopener noreferrer';
     link.title = href;
     link.setAttribute('aria-label', `Open link for "${shown}"`);
-    link.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7"></path><path d="M10 14 21 3"></path><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"></path></svg>';
+    link.appendChild(icon(ICONS.link));
     link.addEventListener('pointerdown', (e) => e.stopPropagation());
     li.appendChild(link);
   }
@@ -789,6 +811,16 @@ function addTask(text, points = 0) {
   if (store.addTask(text, null, points)) fetchTasks();
 }
 
+/**
+ * Finishing a task: the row shows it done on the spot (a class, one cheap style change), and the bookkeeping, which
+ * rebuilds the lists, runs on the next frame. The tap is answered before the rebuild, however long the list is.
+ */
+function completeSoon(id, row) {
+  if (row.classList.contains('completing')) return; // a second tap while it is on its way
+  row.classList.add('completing');
+  requestAnimationFrame(() => setTimeout(() => toggleTask(id, true), 0));
+}
+
 function toggleTask(id, completed) {
   const task = tasks.find(t => t.id === id);
   const before = store.pointsSummary().today;
@@ -802,7 +834,7 @@ function toggleTask(id, completed) {
     }
   }
   fetchTasks();
-  loadStats();
+  scheduleStats();
   updateClock();
   if (!completed) return;
   document.querySelectorAll(`#task-list [data-id="${CSS.escape(id)}"], #task-matrix [data-id="${CSS.escape(id)}"]`)
@@ -843,7 +875,7 @@ function deleteTask(id) {
   if (store.getWorkState().task_id === id) retargetWork(null);
   store.deleteTask(id);
   fetchTasks();
-  loadStats();
+  scheduleStats();
   showToast(`Deleted “${taskDisplayText(removed.text)}”`, {
     label: 'Undo',
     onClick: () => {
@@ -937,11 +969,11 @@ function attachSwipe(li, task) {
   const doneLayer = document.createElement('div');
   doneLayer.className = 'swipe-layer swipe-done';
   doneLayer.setAttribute('aria-hidden', 'true');
-  doneLayer.innerHTML = 'Done' + CHECK_SVG;
+  doneLayer.append('Done', icon(CHECK_SVG));
   const moreLayer = document.createElement('div');
   moreLayer.className = 'swipe-layer swipe-more';
   moreLayer.setAttribute('aria-hidden', 'true');
-  moreLayer.innerHTML = DOTS_SVG + 'More';
+  moreLayer.append(icon(DOTS_SVG), 'More');
   li.append(doneLayer, moreLayer);
 
   const allow = { left: true, right: true };
@@ -1027,7 +1059,7 @@ function attachSwipe(li, task) {
     if (verdict === 'right') {
       celebrate('tiny', r.left + 24, r.top + r.height / 2);
       buzz(15);
-      toggleTask(task.id, true);
+      completeSoon(task.id, li);
     } else if (verdict === 'left') {
       openTaskSheet(task);
     }

@@ -261,3 +261,39 @@ test('validate.sh checks flow.js too', () => {
   assert.match(script, /for f in [^;]*flow\.js/);
   assert.match(script, /-- store\.js timer-core\.js app\.js flow\.js/);
 });
+
+// ---- render and feedback polish ----
+
+test('only the task view on screen is drawn; the other is drawn when you switch to it', () => {
+  const app = read('app.js');
+  const tasksFn = app.slice(app.indexOf('function renderTasks()'), app.indexOf('function renderList()'));
+  assert.match(tasksFn, /renderVisibleView\(\)/);
+  assert.doesNotMatch(tasksFn, /renderMatrix\(\)|renderList\(\)/, 'renderTasks must not rebuild both views');
+  assert.match(app, /function renderVisibleView\(\) \{\s*if \(taskView === 'matrix'\) renderMatrix\(\);\s*else renderList\(\);/);
+  assert.match(app, /taskView = view === 'matrix' \? 'matrix' : 'list';\s*renderVisibleView\(\);/, 'switching views draws the one that was hidden');
+  const list = app.slice(app.indexOf('function renderList()'), app.indexOf('/** Fill the unsorted tray'));
+  assert.doesNotMatch(list, /renderMatrix\(\)|renderDone\(\)/, 'the list builder only builds the list');
+});
+
+test('stats are drawn after the frame and coalesced; first load and backup import stay immediate', () => {
+  const app = read('app.js');
+  assert.match(app, /const scheduleStats = coalesce\(\(\) => loadStats\(\), \(fn\) => requestAnimationFrame\(\(\) => setTimeout\(fn, 0\)\)\)/);
+  ['function afterModeChange', 'function toggleTask', 'function deleteTask', 'function resetToday'].forEach((fn) => {
+    const body = app.slice(app.indexOf(fn), app.indexOf(fn) + 1500);
+    assert.match(body.slice(0, body.indexOf('\n}\n') + 3), /scheduleStats\(\)/, `${fn} schedules the stats`);
+  });
+  // the two places that must show stats at once keep the direct call
+  assert.match(app, /const added = store\.importBackup\(data\);[\s\S]*?\n    loadStats\(\);/);
+  assert.match(app, /loadSettings\(\);\n  fetchTasks\(\);\n  loadStats\(\);/);
+});
+
+test('finishing a task answers the tap first: the row is marked done at once, the rebuild follows on the next frame', () => {
+  const app = read('app.js');
+  assert.match(app, /function completeSoon\(id, row\) \{\s*if \(row\.classList\.contains\('completing'\)\) return;[^\n]*\n\s*row\.classList\.add\('completing'\);\s*requestAnimationFrame\(\(\) => setTimeout\(\(\) => toggleTask\(id, true\), 0\)\);/);
+  assert.equal((app.match(/completeSoon\(task\.id, li\)/g) || []).length, 3, 'list checkbox, matrix checkbox and the swipe');
+  assert.doesNotMatch(app, /toggleTask\(task\.id, !task\.completed\)/, 'no path completes a task synchronously from a tap any more');
+  const css = read('style.css');
+  ['\\.task-item\\.completing \\.task-checkbox-btn', '\\.task-item\\.completing \\.task-text', '\\.matrix-chip\\.completing \\.matrix-check', '\\.matrix-chip\\.completing \\.matrix-chip-text'].forEach((sel) => {
+    assert.match(css, new RegExp(sel), `${sel} is styled`);
+  });
+});

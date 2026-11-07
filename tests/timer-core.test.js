@@ -308,3 +308,47 @@ test('flowResult: the finished draft for the store, with safe fallbacks', () => 
   assert.match(tooLong.error, /too long/);
   assert.equal(T.flowResult({ title: 'x'.repeat(250), link: '' }).step, 'title');
 });
+
+// ---- coalesce: draw non-urgent work once, just after the frame ----
+
+test('coalesce runs once however many times it is triggered before the scheduler fires', () => {
+  const queue = [];
+  let runs = 0;
+  const trigger = T.coalesce(() => { runs += 1; }, (fn) => queue.push(fn));
+  assert.equal(trigger(), true, 'the first call schedules');
+  assert.equal(trigger(), false);
+  assert.equal(trigger(), false);
+  assert.equal(queue.length, 1, 'only one run is waiting');
+  queue.shift()();
+  assert.equal(runs, 1);
+});
+
+test('coalesce can be triggered again once the run has happened', () => {
+  const queue = [];
+  let runs = 0;
+  const trigger = T.coalesce(() => { runs += 1; }, (fn) => queue.push(fn));
+  trigger(); queue.shift()();
+  assert.equal(trigger(), true, 'a later change schedules a new run');
+  queue.shift()();
+  assert.equal(runs, 2);
+});
+
+test('coalesce: a run that throws does not block later runs', () => {
+  const queue = [];
+  let runs = 0;
+  const trigger = T.coalesce(() => { runs += 1; if (runs === 1) throw new Error('boom'); }, (fn) => queue.push(fn));
+  trigger();
+  assert.throws(() => queue.shift()(), /boom/);
+  assert.equal(trigger(), true, 'still schedulable after the failure');
+  queue.shift()();
+  assert.equal(runs, 2);
+});
+
+test('coalesce does nothing until triggered, and never runs synchronously', () => {
+  let runs = 0;
+  const queue = [];
+  const trigger = T.coalesce(() => { runs += 1; }, (fn) => queue.push(fn));
+  assert.equal(runs, 0);
+  trigger();
+  assert.equal(runs, 0, 'the scheduler decides when');
+});
