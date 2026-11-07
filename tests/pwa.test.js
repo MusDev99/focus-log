@@ -304,6 +304,8 @@ test('text colours of the Jira site setting keep 4.5:1 in light and dark, includ
   });
   assert.ok(ratio('#c53030', themes.light['--surface']) >= 4.5, 'the error red on the light card');
   assert.ok(ratio('#ff9b9b', themes.dark['--surface']) >= 4.5, 'the lighter error red on the dark card');
+});
+
 // ---- colour contrast of the new activity flow, sheet and primary buttons (WCAG AA: 4.5:1 for text) ----
 
 /** Hex colour tokens from style.css: light = everything outside the dark blocks; dark = the dark blocks laid over light. */
@@ -372,4 +374,20 @@ test('the contrast helper itself is right (known ratios)', () => {
   assert.ok(Math.abs(contrast('#000000', '#ffffff') - 21) < 0.01);
   assert.ok(Math.abs(contrast('#777777', '#ffffff') - 4.48) < 0.02);
   assert.equal(contrast('#336699', '#336699'), 1);
+});
+
+test('app.js lists every TimerCore helper it calls (a missing name is a ReferenceError at startup and the page does nothing)', () => {
+  const exported = Object.keys(require('../timer-core.js'));
+  const app = read('app.js');
+  const listed = (app.match(/const \{([^}]+)\} = window\.TimerCore;/) || [])[1];
+  assert.ok(listed, 'app.js destructures window.TimerCore');
+  const names = listed.split(',').map((s) => s.trim());
+  names.forEach((n) => assert.ok(exported.includes(n), `${n} is exported by timer-core.js`));
+  // code only: comments and strings are not calls
+  const code = app.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '').replace(/(['"`])(?:\\.|(?!\1)[^\\])*\1/g, '""');
+  exported.forEach((name) => {
+    const bareCall = new RegExp(`(?<![.\\w$])${name}\\(`).test(code);
+    const declared = new RegExp(`(?:function|const|let|var)\\s+${name}\\b`).test(code);
+    if (bareCall && !declared) assert.ok(names.includes(name), `app.js calls ${name}() but does not take it from window.TimerCore`);
+  });
 });
