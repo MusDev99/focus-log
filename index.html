@@ -546,6 +546,12 @@
             <option value="pig">🐷 Pig</option>
           </select>
         </div>
+        <div class="setting-item setting-stack">
+          <label for="setting-jira">Jira site</label>
+          <input id="setting-jira" type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="yourteam.atlassian.net" aria-describedby="setting-jira-hint setting-jira-error">
+          <p id="setting-jira-hint" class="setting-hint">Type a key like SKYIQ-123 in a task and it links here. Saved on this device.</p>
+          <p id="setting-jira-error" class="setting-error" role="alert" hidden>Use your Jira address, like yourteam.atlassian.net (https only).</p>
+        </div>
         <div class="setting-item">
           <label for="setting-sound">Character sounds (call on switch, cheer on done)</label>
           <input id="setting-sound" class="setting-toggle" type="checkbox">
